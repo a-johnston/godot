@@ -74,7 +74,7 @@ bool FuzzyTokenMatch::intersects(const Vector2i other_interval) {
 	return interval.y >= other_interval.x && interval.x <= other_interval.y;
 }
 
-Ref<FuzzySearchResultV2> new_search_result(const String &p_target) {
+Ref<FuzzySearchResultV2> new_search_result_v2(const String &p_target) {
 	Ref<FuzzySearchResultV2> result;
 	result.instantiate();
 	result->target = p_target;
@@ -242,7 +242,7 @@ Ref<FuzzySearchResultV2> fuzzy_search(const PackedStringArray &p_query, const St
 	}
 
 	String adjusted_target = case_sensitive ? p_target : p_target.to_lower();
-	Ref<FuzzySearchResultV2> result = new_search_result(p_target);
+	Ref<FuzzySearchResultV2> result = new_search_result_v2(p_target);
 
 	// For each token, eagerly generate subsequences starting from index 0 and keep the best scoring one
 	// which does not conflict with prior token matches. This is not ensured to find the highest scoring
@@ -288,7 +288,7 @@ Vector<Ref<FuzzySearchResultV2>> FuzzySearchV2::search_all(const String &p_query
 	// Just spit out the results list if no query is given.
 	if (p_query.is_empty()) {
 		for (int i = 0; (i < max_results) && (i < p_targets.size()); i++) {
-			res.push_back(new_search_result(p_targets[i]));
+			res.push_back(new_search_result_v2(p_targets[i]));
 		}
 
 		return res;
@@ -327,9 +327,6 @@ void FuzzySearchV2::draw_matches(Tree *p_tree) {
 	Vector2 margin_and_scroll_offset = -p_tree->get_scroll();
 	margin_and_scroll_offset.x += p_tree->get_theme_constant("item_margin");
 	margin_and_scroll_offset.y += font->get_string_size("A", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).y;
-
-	Vector2 magic_numbers = Vector2(23, -5);
-	margin_and_scroll_offset += magic_numbers;
 
 	Ref<Texture2D> icon = head->get_icon(0);
 	if (icon.is_valid()) {

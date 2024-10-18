@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "fuzzy_search.h"
+
 #include "core/string/ustring.h"
 #include "core/variant/variant.h"
 #include "scene/gui/tree.h"
@@ -68,7 +69,7 @@ bool is_word_boundary(const String &str, int index) {
 	if (index == -1 || index == str.size()) {
 		return true;
 	}
-	return boundary_chars.find_char(str[index]) >= 0;
+	return boundary_chars.contains(str[index]);
 }
 
 void FuzzyTokenMatch::add_substring(int substring_start, int substring_length) {
@@ -94,7 +95,7 @@ bool FuzzySearchResult::can_add_token_match(const Ref<FuzzyTokenMatch> &p_match)
 		if (token_matches.size() == 1) {
 			return false;
 		}
-		for (Ref<FuzzyTokenMatch> existing_match : token_matches) {
+		for (const Ref<FuzzyTokenMatch> &existing_match : token_matches) {
 			if (existing_match->intersects(p_match->interval)) {
 				return false;
 			}
@@ -106,7 +107,8 @@ bool FuzzySearchResult::can_add_token_match(const Ref<FuzzyTokenMatch> &p_match)
 
 bool FuzzyTokenMatch::is_case_insensitive(const String &p_original, const String &p_adjusted) {
 	for (const Vector2i substr : substrings) {
-		for (int i = substr.x; i < substr.x + substr.y; i++) {
+		const int end = substr.x + substr.y;
+		for (int i = substr.x; i < end; i++) {
 			if (p_original[i] != p_adjusted[i]) {
 				return true;
 			}
@@ -121,7 +123,7 @@ void FuzzySearchResult::score_token_match(Ref<FuzzyTokenMatch> &p_match, bool p_
 
 	p_match->score = -20 * p_match->misses() - (p_case_insensitive ? 3 : 0);
 
-	for (Vector2i substring : p_match->substrings) {
+	for (const Vector2i &substring : p_match->substrings) {
 		// Score longer substrings higher than short substrings
 		int substring_score = substring.y * substring.y;
 		// Score matches deeper in path higher than shallower matches
@@ -159,9 +161,7 @@ Vector<Ref<FuzzySearchResult>> FuzzySearch::sort_and_filter(const Vector<Ref<Fuz
 
 	for (const Ref<FuzzySearchResult> &result : p_results) {
 		avg_score += result->score;
-		if (result->score > max_score) {
-			max_score = result->score;
-		}
+		max_score = MAX(max_score, result->score);
 	}
 
 	// TODO: Tune scoring and culling here to display fewer subsequence soup matches when good matches

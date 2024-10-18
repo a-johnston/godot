@@ -44,7 +44,7 @@ class FuzzyTokenMatch : public RefCounted {
 	friend class FuzzySearch;
 
 protected:
-	int token_length{};
+	int token_length = 0;
 	int matched_length{};
 	Vector2i interval = Vector2i(-1, -1); // x and y are both inclusive indices
 
@@ -55,7 +55,7 @@ public:
 	Vector<Vector2i> substrings; // x is start index, y is length
 
 	void add_substring(int substring_start, int substring_length);
-	bool intersects(Vector2i other_interval) const;
+	bool intersects(const Vector2i &other_interval) const;
 	bool is_case_insensitive(const String &p_original, const String &p_adjusted);
 
 	int misses() const { return token_length - matched_length; }

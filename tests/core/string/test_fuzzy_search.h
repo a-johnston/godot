@@ -43,6 +43,35 @@ struct FuzzySearchTestCase {
 	String expected;
 };
 
+struct FuzzySearchTestOutcome {
+	String top_result;
+	int result_count;
+};
+
+struct FuzzySearchBenchmarkResult {
+	double average_ms;
+	double stddev_ms;
+	FuzzySearchTestOutcome outcome;
+};
+
+// Ideally each of these test queries should represent a different aspect, and potentially bottleneck, of the search process.
+const FuzzySearchTestCase test_cases[] = {
+	// Short query, many matches, few adjacent characters
+	{ "///gd", "./menu/hud/hud.gd" },
+	// Filename match with typo
+	{ "sm.png", "./entity/blood_sword/sam.png" },
+	// Multipart filename word matches
+	{ "ham ", "./entity/game_trap/ha_missed_me.wav" },
+	// Single word token matches
+	{ "push background", "./entity/background_zone1/background/push.png" },
+	// Long token matches
+	{ "background_freighter background png", "./entity/background_freighter/background/background.png" },
+	// Many matches, many short tokens
+	{ "menu menu characters wav", "./menu/menu/characters/smoker/0.wav" },
+	// Maximize total matches
+	{ "entity gd", "./entity/entity_man.gd" }
+};
+
 double calculate_mean(const Vector<double> &p_numbers) {
 	double sum = 0.0;
 	for (double num : p_numbers) {
@@ -62,21 +91,6 @@ double calculate_std_dev(const Vector<double> &p_numbers) {
 	return std::sqrt(variance);
 }
 
-auto load_test_cases() {
-	Ref<FileAccess> tests = FileAccess::open(TestUtils::get_data_path("fuzzy_search/fuzzy_search_tests.txt"), FileAccess::READ);
-	REQUIRE(!tests.is_null());
-
-	Vector<FuzzySearchTestCase> test_cases;
-	while (true) {
-		auto line = tests->get_csv_line();
-		if (line.size() != 2) {
-			break;
-		}
-		test_cases.append({ line[0], line[1] });
-	}
-	return test_cases;
-}
-
 auto load_test_data(int p_repeat = 1) {
 	// This file has 1k entries so p_repeat can be used to benchmark in multiples of 1k
 	Ref<FileAccess> fp = FileAccess::open(TestUtils::get_data_path("fuzzy_search/project_dir_tree.txt"), FileAccess::READ);
@@ -90,16 +104,18 @@ auto load_test_data(int p_repeat = 1) {
 	return all_lines;
 }
 
-auto get_top_result(String &p_query, Vector<String> &p_lines) {
-	Vector<Ref<FuzzySearchResult>> res = FuzzySearch::search_all(p_query, p_lines);
-	if (res.size() > 0) {
-		return res[0]->target;
-	}
-	return String("<no result>");
+FuzzySearchTestOutcome get_top_result_and_count(String &p_query, Vector<String> &p_lines, int p_max_results = 100) {
+	Ref<FuzzySearch> search;
+	search.instantiate();
+	search->set_query(p_query);
+	search->max_results = p_max_results;
+	auto res = search->search_all(p_lines);
+	return { res.size() > 0 ? res[0]->target : "<no result>", (int) res.size() };
 }
 
-auto bench(String p_query, Vector<String> p_targets) {
+FuzzySearchBenchmarkResult bench(String p_query, Vector<String> p_targets) {
 	Vector<double> timings;
+	FuzzySearchTestOutcome result;
 
 	// run twice for a warmp up
 	for (int i = 0; i < 2; i++) {
@@ -107,30 +123,34 @@ auto bench(String p_query, Vector<String> p_targets) {
 
 		for (int j = 0; j < 10; j++) {
 			auto start = std::chrono::high_resolution_clock::now();
-			get_top_result(p_query, p_targets);
+			result = get_top_result_and_count(p_query, p_targets);
 			auto end = std::chrono::high_resolution_clock::now();
 			auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 			timings.push_back(duration / 1000.0f); // Convert to fractional ms
 		}
 	}
 
-	MESSAGE(vformat("%-15s\t%4.2f\t\t%4.2f", p_query, calculate_mean(timings), calculate_std_dev(timings)));
+	return { calculate_mean(timings), calculate_std_dev(timings), result };
+
 }
 
 /*
 TEST_CASE("[Stress][FuzzySearch] Benchmark fuzzy search") {
 	auto targets = load_test_data(20);
-	MESSAGE("Query\t\tMean (ms)\tStd Dev (ms)\tTargets: ", targets.size());
-	for (auto test_case : load_test_cases()) {
-		bench(test_case.query, targets);
+	print_line(vformat("Benchmarking fuzzy search against %dk targets", targets.size() / 1000));
+	print_line("Query\tMean (ms)\tStd Dev (ms)\tMatches");
+	int i = 1;
+	for (auto test_case : test_cases) {
+		auto result = bench(test_case.query, targets);
+		print_line(vformat("%d\t%4.2f\t\t%4.2f\t\t%d", i++, result.average_ms, result.stddev_ms, result.outcome.result_count));
 	}
 }
 */
 
 TEST_CASE("[FuzzySearch] Test fuzzy search results") {
 	auto targets = load_test_data();
-	for (auto test_case : load_test_cases()) {
-		CHECK_EQ(get_top_result(test_case.query, targets), test_case.expected);
+	for (auto test_case : test_cases) {
+		CHECK_EQ(get_top_result_and_count(test_case.query, targets).top_result, test_case.expected);
 	}
 }
 

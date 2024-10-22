@@ -1,3 +1,0 @@
-sm.png,./entity/blood_sword/sam.png
-ham,./entity/game_trap/ha_missed_me.wav
-push background,./entity/background_zone1/background/push.png

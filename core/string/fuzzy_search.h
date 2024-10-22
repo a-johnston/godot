@@ -114,9 +114,6 @@ public:
 			const String &p_target);
 	Ref<FuzzySearchResult> search(const String &p_target);
 	Vector<Ref<FuzzySearchResult>> search_all(const PackedStringArray &p_targets);
-
-	static Vector<Ref<FuzzySearchResult>> search_all(const String &p_query, const PackedStringArray &p_targets);
-	// static void draw_matches(Tree *p_tree);
 };
 
 #endif // FUZZY_SEARCH_H

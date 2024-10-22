@@ -377,10 +377,3 @@ Vector<Ref<FuzzySearchResult>> FuzzySearch::search_all(const PackedStringArray &
 
 	return sort_and_filter(results);
 }
-
-Vector<Ref<FuzzySearchResult>> FuzzySearch::search_all(const String &p_query, const PackedStringArray &p_targets) {
-	Ref<FuzzySearch> searcher;
-	searcher.instantiate();
-	searcher->set_query(p_query);
-	return searcher->search_all(p_targets);
-}

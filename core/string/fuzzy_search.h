@@ -31,74 +31,52 @@
 #ifndef FUZZY_SEARCH_H
 #define FUZZY_SEARCH_H
 
-#include "core/object/ref_counted.h"
-#include "core/variant/array.h"
 #include "core/variant/variant.h"
 
-class Tree;
-
-class FuzzyTokenMatch : public RefCounted {
-	GDCLASS(FuzzyTokenMatch, RefCounted);
-
+class FuzzyTokenMatch {
 	friend class FuzzySearchResult;
 	friend class FuzzySearch;
 
-protected:
 	int token_length = 0;
-	int matched_length{};
+	int matched_length = 0;
 	Vector2i interval = Vector2i(-1, -1); // x and y are both inclusive indices
 
-	static void _bind_methods() {}
-
 public:
-	int score{};
+	int score = 0;
 	Vector<Vector2i> substrings; // x is start index, y is length
 
 	void add_substring(int substring_start, int substring_length);
 	bool intersects(const Vector2i &other_interval) const;
-	bool is_case_insensitive(const String &p_original, const String &p_adjusted);
+	bool is_case_insensitive(const String &p_original, const String &p_adjusted) const;
 
-	int misses() const { return token_length - matched_length; }
+	int get_miss_count() const { return token_length - matched_length; }
 };
 
-class FuzzySearchResult : public RefCounted {
-	GDCLASS(FuzzySearchResult, RefCounted);
-
+class FuzzySearchResult {
 	friend class FuzzySearch;
 
-protected:
 	int miss_budget{};
 	Vector2i match_interval = Vector2i(-1, -1);
 
-	static void _bind_methods() {}
-
 public:
 	String target;
-	int score{};
+	int score = 0;
 	int dir_index = -1;
-	Vector<Ref<FuzzyTokenMatch>> token_matches;
+	Vector<FuzzyTokenMatch> token_matches;
 
-	bool can_add_token_match(const Ref<FuzzyTokenMatch> &p_match) const;
-	void score_token_match(Ref<FuzzyTokenMatch> &p_match, bool p_case_insensitive);
-	void add_token_match(Ref<FuzzyTokenMatch> &p_match);
+	bool can_add_token_match(const FuzzyTokenMatch &p_match) const;
+	void score_token_match(FuzzyTokenMatch &p_match, bool p_case_insensitive) const;
+	void add_token_match(const FuzzyTokenMatch &p_match);
 };
 
-class FuzzySearch : public RefCounted {
-	GDCLASS(FuzzySearch, RefCounted);
-
-private:
-	void reset_match(Ref<FuzzyTokenMatch> &p_match, const String &p_token) const;
-	void reset_result(Ref<FuzzySearchResult> &p_result, const String &p_target) const;
-	Vector<Ref<FuzzySearchResult>> sort_and_filter(const Vector<Ref<FuzzySearchResult>> &p_results);
+class FuzzySearch {
+	void sort_and_filter(Vector<FuzzySearchResult> &p_results) const;
 	bool try_match_token(
-			Ref<FuzzyTokenMatch> p_match,
+			FuzzyTokenMatch &p_match,
 			const String &p_token,
 			const String &p_target,
 			int p_offset,
 			int p_miss_budget) const;
-
-protected:
-	static void _bind_methods() {}
 
 public:
 	PackedStringArray tokens;
@@ -109,11 +87,8 @@ public:
 	bool allow_subsequences = true;
 
 	void set_query(const String &p_query);
-	bool fuzzy_search(
-			Ref<FuzzySearchResult> p_result,
-			const String &p_target);
-	Ref<FuzzySearchResult> search(const String &p_target);
-	Vector<Ref<FuzzySearchResult>> search_all(const PackedStringArray &p_targets);
+	bool search(const String &p_target, FuzzySearchResult &p_result) const;
+	void search_all(const PackedStringArray &p_targets, Vector<FuzzySearchResult> &p_results) const;
 };
 
 #endif // FUZZY_SEARCH_H

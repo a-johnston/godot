@@ -61,7 +61,7 @@ struct QuickOpenResultCandidate {
 	String file_directory;
 
 	Ref<Texture2D> thumbnail;
-	Ref<FuzzySearchResult> result;
+	const FuzzySearchResult *result;
 };
 
 class QuickOpenResultContainer : public VBoxContainer {
@@ -88,7 +88,8 @@ protected:
 private:
 	static const int SHOW_ALL_FILES_THRESHOLD = 30;
 
-	Ref<FuzzySearch> fuzzy_search;
+	FuzzySearch fuzzy_search;
+	Vector<FuzzySearchResult> search_results;
 	Vector<StringName> base_types;
 	Vector<String> filepaths;
 	OAHashMap<String, StringName> filetypes;
@@ -149,7 +150,7 @@ class QuickOpenResultGridItem : public VBoxContainer {
 public:
 	QuickOpenResultGridItem();
 
-	Ref<FuzzySearchResult> result;
+	const FuzzySearchResult *result;
 
 	void set_content(const QuickOpenResultCandidate &p_candidate);
 	Vector<Rect2i> get_search_highlights();
@@ -168,7 +169,7 @@ class QuickOpenResultListItem : public HBoxContainer {
 public:
 	QuickOpenResultListItem();
 
-	Ref<FuzzySearchResult> result;
+	const FuzzySearchResult *result;
 
 	void set_content(const QuickOpenResultCandidate &p_candidate);
 	Vector<Rect2i> get_search_highlights();

@@ -50,7 +50,7 @@ struct FuzzySearchTestOutcome {
 
 struct FuzzySearchBenchmarkResult {
 	double average_ms;
-	double stddev_ms;
+	double std_dev_ms;
 	FuzzySearchTestOutcome outcome;
 };
 
@@ -83,7 +83,6 @@ double calculate_mean(const Vector<double> &p_numbers) {
 double calculate_std_dev(const Vector<double> &p_numbers) {
 	double mean = calculate_mean(p_numbers);
 	double variance = 0.0;
-
 	for (double num : p_numbers) {
 		variance += (num - mean) * (num - mean);
 	}
@@ -105,12 +104,12 @@ auto load_test_data(int p_repeat = 1) {
 }
 
 FuzzySearchTestOutcome get_top_result_and_count(String &p_query, Vector<String> &p_lines, int p_max_results = 100) {
-	Ref<FuzzySearch> search;
-	search.instantiate();
-	search->set_query(p_query);
-	search->max_results = p_max_results;
-	auto res = search->search_all(p_lines);
-	return { res.size() > 0 ? res[0]->target : "<no result>", (int) res.size() };
+	FuzzySearch search;
+	search.set_query(p_query);
+	search.max_results = p_max_results;
+	Vector<FuzzySearchResult> results;
+	search.search_all(p_lines, results);
+	return { results.size() > 0 ? results[0].target : "<no result>", (int) results.size() };
 }
 
 FuzzySearchBenchmarkResult bench(String p_query, Vector<String> p_targets) {
@@ -142,7 +141,7 @@ TEST_CASE("[Stress][FuzzySearch] Benchmark fuzzy search") {
 	int i = 1;
 	for (auto test_case : test_cases) {
 		auto result = bench(test_case.query, targets);
-		print_line(vformat("%d\t%4.2f\t\t%4.2f\t\t%d", i++, result.average_ms, result.stddev_ms, result.outcome.result_count));
+		print_line(vformat("%d\t%4.2f\t\t%4.2f\t\t%d", i++, result.average_ms, result.std_dev_ms, result.outcome.result_count));
 	}
 }
 */

@@ -46,8 +46,6 @@
 #include "scene/gui/tree.h"
 
 const Vector2i MAGIC_HIGHLIGHT_OFFSET = { 4, 5 };
-const String DISPLAY_MODE_SETTING = "filesystem/quick_open_dialog/default_display_mode";
-const String FUZZY_MATCHING_SETTING = "filesystem/quick_open_dialog/enable_fuzzy_matching";
 const String INCLUDE_ADDONS_SETTING = "filesystem/quick_open_dialog/include_addons";
 const String MAX_RESULTS_SETTING = "filesystem/quick_open_dialog/max_results";
 const String MAX_MISSES_SETTING = "filesystem/quick_open_dialog/max_fuzzy_misses";
@@ -140,8 +138,7 @@ void style_button(Button *p_button) {
 }
 
 QuickOpenResultContainer::QuickOpenResultContainer() {
-	fuzzy_search.instantiate();
-	fuzzy_search->start_offset = 6; // Don't match against "res://"
+	fuzzy_search.start_offset = 6; // Don't match against "res://"
 	set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	add_theme_constant_override("separation", 0);
@@ -251,7 +248,7 @@ QuickOpenResultContainer::~QuickOpenResultContainer() {
 void QuickOpenResultContainer::init(const Vector<StringName> &p_base_types) {
 	base_types = p_base_types;
 
-	const int display_mode_behavior = EDITOR_GET(DISPLAY_MODE_SETTING);
+	const int display_mode_behavior = EDITOR_GET("filesystem/quick_open_dialog/default_display_mode");
 	const bool adaptive_display_mode = (display_mode_behavior == 0);
 
 	if (adaptive_display_mode) {
@@ -261,7 +258,7 @@ void QuickOpenResultContainer::init(const Vector<StringName> &p_base_types) {
 		_set_display_mode((QuickOpenDisplayMode)last);
 	}
 
-	const bool fuzzy_matching = EDITOR_GET(FUZZY_MATCHING_SETTING);
+	const bool fuzzy_matching = EDITOR_GET("filesystem/quick_open_dialog/enable_fuzzy_matching");
 	const bool include_addons = EDITOR_GET(INCLUDE_ADDONS_SETTING);
 	fuzzy_search_toggle->set_pressed_no_signal(fuzzy_matching);
 	include_addons_toggle->set_pressed_no_signal(include_addons);
@@ -330,25 +327,26 @@ void QuickOpenResultContainer::_score_and_sort_candidates() {
 		return;
 	}
 
-	fuzzy_search->set_query(query);
-	fuzzy_search->max_results = max_total_results;
-	bool fuzzy_matching = EDITOR_GET(FUZZY_MATCHING_SETTING);
+	fuzzy_search.set_query(query);
+	fuzzy_search.max_results = max_total_results;
+	bool fuzzy_matching = EDITOR_GET("filesystem/quick_open_dialog/enable_fuzzy_matching");
 	int max_misses = EDITOR_GET(MAX_MISSES_SETTING);
-	fuzzy_search->allow_subsequences = fuzzy_matching;
-	fuzzy_search->max_misses = fuzzy_matching ? max_misses : 0;
+	fuzzy_search.allow_subsequences = fuzzy_matching;
+	fuzzy_search.max_misses = fuzzy_matching ? max_misses : 0;
 
-	Vector<Ref<FuzzySearchResult>> results = fuzzy_search->search_all(filepaths);
-	candidates.resize(results.size());
+	fuzzy_search.search_all(filepaths, search_results);
+	candidates.resize(search_results.size());
+	QuickOpenResultCandidate *candidates_write = candidates.ptrw();
 
-	for (int i = 0; i < results.size(); i++) {
-		String filename = results[i]->target;
-		StringName actual_type = *filetypes.lookup_ptr(results[i]->target);
+	for (const FuzzySearchResult &result : search_results) {
+		const String &filepath = result.target;
+		StringName actual_type = *filetypes.lookup_ptr(filepath);
 		QuickOpenResultCandidate candidate;
-		candidate.file_name = filename.get_file();
-		candidate.file_directory = filename.get_base_dir();
-		candidate.result = results[i];
+		candidate.file_name = filepath.get_file();
+		candidate.file_directory = filepath.get_base_dir();
+		candidate.result = &result;
 
-		EditorResourcePreview::PreviewItem item = EditorResourcePreview::get_singleton()->get_resource_preview_if_available(filename);
+		EditorResourcePreview::PreviewItem item = EditorResourcePreview::get_singleton()->get_resource_preview_if_available(filepath);
 		if (item.preview.is_valid()) {
 			candidate.thumbnail = item.preview;
 		} else if (file_type_icons.has(actual_type)) {
@@ -360,7 +358,7 @@ void QuickOpenResultContainer::_score_and_sort_candidates() {
 			candidate.thumbnail = *file_type_icons.lookup_ptr("__default_icon");
 		}
 
-		candidates.set(i, candidate);
+		*candidates_write++ = candidate;
 	}
 }
 
@@ -527,7 +525,7 @@ void QuickOpenResultContainer::_item_input(const Ref<InputEvent> &p_ev, int p_in
 }
 
 void QuickOpenResultContainer::_toggle_fuzzy_search(bool p_pressed) {
-	EditorSettings::get_singleton()->set(FUZZY_MATCHING_SETTING, p_pressed);
+	EditorSettings::get_singleton()->set("filesystem/quick_open_dialog/enable_fuzzy_matching", p_pressed);
 	update_results();
 }
 
@@ -826,14 +824,14 @@ void QuickOpenResultItem::_notification(int p_what) {
 
 //----------------- List item
 
-Vector2i get_path_interval(const Vector2i p_interval, const int p_dir_index) {
+Vector2i get_path_interval(const Vector2i &p_interval, const int p_dir_index) {
 	if (p_interval.x >= p_dir_index || p_interval.y < 1) {
 		return { -1, -1 };
 	}
 	return { p_interval.x, MIN(p_interval.x + p_interval.y, p_dir_index) - p_interval.x };
 }
 
-Vector2i get_name_interval(const Vector2i p_interval, const int p_dir_index) {
+Vector2i get_name_interval(const Vector2i &p_interval, const int p_dir_index) {
 	if (p_interval.x + p_interval.y <= p_dir_index || p_interval.y < 1) {
 		return { -1, -1 };
 	}
@@ -916,7 +914,7 @@ Vector<Rect2i> QuickOpenResultListItem::get_search_highlights() {
 	Vector<Rect2i> highlights;
 	Ref<Font> font = get_theme_font(SceneStringName(font));
 
-	if (result.is_null() || font.is_null()) {
+	if (result == nullptr || font.is_null()) {
 		return highlights;
 	}
 
@@ -925,8 +923,8 @@ Vector<Rect2i> QuickOpenResultListItem::get_search_highlights() {
 	Vector2i path_position = path->get_screen_position() - get_screen_position();
 	Vector2i name_position = name->get_screen_position() - get_screen_position();
 
-	for (Ref<FuzzyTokenMatch> match : result->token_matches) {
-		for (Vector2i interval : match->substrings) {
+	for (const FuzzyTokenMatch &match : result->token_matches) {
+		for (const Vector2i &interval : match.substrings) {
 			Vector2i path_interval = get_path_interval(interval, result->dir_index);
 			Vector2i name_interval = get_name_interval(interval, result->dir_index);
 			if (path_interval.x != -1) {
@@ -1009,7 +1007,7 @@ Vector<Rect2i> QuickOpenResultGridItem::get_search_highlights() {
 	Vector<Rect2i> highlights;
 	Ref<Font> font = get_theme_font(SceneStringName(font));
 
-	if (result.is_null() || font.is_null()) {
+	if (result == nullptr || font.is_null()) {
 		return highlights;
 	}
 
@@ -1025,8 +1023,8 @@ Vector<Rect2i> QuickOpenResultGridItem::get_search_highlights() {
 		return highlights;
 	}
 
-	for (Ref<FuzzyTokenMatch> match : result->token_matches) {
-		for (Vector2i interval : match->substrings) {
+	for (const FuzzyTokenMatch &match : result->token_matches) {
+		for (const Vector2i &interval : match.substrings) {
 			Vector2i name_interval = get_name_interval(interval, result->dir_index);
 			if (name_interval.x != -1) {
 				Rect2i name_highlight = get_highlight_region(font, font_size, name->get_text(), name_interval);

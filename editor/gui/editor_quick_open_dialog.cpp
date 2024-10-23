@@ -30,6 +30,7 @@
 
 #include "editor_quick_open_dialog.h"
 
+#include "core/string/fuzzy_search.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_node.h"
 #include "editor/editor_resource_preview.h"
@@ -46,10 +47,6 @@
 #include "scene/gui/tree.h"
 
 const Vector2i MAGIC_HIGHLIGHT_OFFSET = { 4, 5 };
-const String INCLUDE_ADDONS_SETTING = "filesystem/quick_open_dialog/include_addons";
-const String MAX_RESULTS_SETTING = "filesystem/quick_open_dialog/max_results";
-const String MAX_MISSES_SETTING = "filesystem/quick_open_dialog/max_fuzzy_misses";
-const String SEARCH_HIGHLIGHT_SETTING = "filesystem/quick_open_dialog/show_search_highlight";
 
 EditorQuickOpenDialog::EditorQuickOpenDialog() {
 	VBoxContainer *vbc = memnew(VBoxContainer);
@@ -138,7 +135,6 @@ void style_button(Button *p_button) {
 }
 
 QuickOpenResultContainer::QuickOpenResultContainer() {
-	fuzzy_search.start_offset = 6; // Don't match against "res://"
 	set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	add_theme_constant_override("separation", 0);
@@ -203,11 +199,19 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 			hbc->add_theme_constant_override("separation", 3);
 			bottom_bar->add_child(hbc);
 
+			Label *fuzzy_search_label = memnew(Label);
+			fuzzy_search_label->set_text(TTR("Fuzzy Search"));
+			hbc->add_child(fuzzy_search_label);
+
 			fuzzy_search_toggle = memnew(CheckButton);
 			style_button(fuzzy_search_toggle);
 			fuzzy_search_toggle->set_tooltip_text(TTR("Enable fuzzy matching"));
 			fuzzy_search_toggle->connect(SceneStringName(toggled), callable_mp(this, &QuickOpenResultContainer::_toggle_fuzzy_search));
 			hbc->add_child(fuzzy_search_toggle);
+
+			Label *include_addons_label = memnew(Label);
+			include_addons_label->set_text(TTR("Addons"));
+			hbc->add_child(include_addons_label);
 
 			include_addons_toggle = memnew(CheckButton);
 			style_button(include_addons_toggle);
@@ -229,7 +233,7 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 
 	// Creating and deleting nodes while searching is slow, so we allocate
 	// a bunch of result nodes and fill in the content based on result ranking.
-	result_items.resize(EDITOR_GET(MAX_RESULTS_SETTING));
+	result_items.resize(EDITOR_GET("filesystem/quick_open_dialog/max_results"));
 	for (int i = 0; i < result_items.size(); i++) {
 		QuickOpenResultItem *item = memnew(QuickOpenResultItem);
 		item->connect(SceneStringName(gui_input), callable_mp(this, &QuickOpenResultContainer::_item_input).bind(i));
@@ -252,19 +256,19 @@ void QuickOpenResultContainer::init(const Vector<StringName> &p_base_types) {
 	const bool adaptive_display_mode = (display_mode_behavior == 0);
 
 	if (adaptive_display_mode) {
-		_set_display_mode(adaptive_display_mode ? get_adaptive_display_mode(p_base_types) : QuickOpenDisplayMode::LIST);
+		_set_display_mode(get_adaptive_display_mode(p_base_types));
 	} else if (never_opened) {
 		int last = EditorSettings::get_singleton()->get_project_metadata("quick_open_dialog", "last_mode", (int)QuickOpenDisplayMode::LIST);
 		_set_display_mode((QuickOpenDisplayMode)last);
 	}
 
 	const bool fuzzy_matching = EDITOR_GET("filesystem/quick_open_dialog/enable_fuzzy_matching");
-	const bool include_addons = EDITOR_GET(INCLUDE_ADDONS_SETTING);
+	const bool include_addons = EDITOR_GET("filesystem/quick_open_dialog/include_addons");
 	fuzzy_search_toggle->set_pressed_no_signal(fuzzy_matching);
 	include_addons_toggle->set_pressed_no_signal(include_addons);
 	never_opened = false;
 
-	const bool enable_highlights = EDITOR_GET(SEARCH_HIGHLIGHT_SETTING);
+	const bool enable_highlights = EDITOR_GET("filesystem/quick_open_dialog/show_search_highlight");
 	for (QuickOpenResultItem *E : result_items) {
 		E->enable_highlights = enable_highlights;
 	}
@@ -315,74 +319,80 @@ void QuickOpenResultContainer::set_query_and_update(const String &p_query) {
 	update_results();
 }
 
+void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &candidate, const String &filepath) {
+	StringName actual_type = *filetypes.lookup_ptr(filepath);
+	candidate.file_path = filepath;
+	candidate.file_name = filepath.get_file();
+	candidate.file_directory = filepath.get_base_dir();
+	candidate.result = nullptr;
+
+	EditorResourcePreview::PreviewItem item = EditorResourcePreview::get_singleton()->get_resource_preview_if_available(filepath);
+	if (item.preview.is_valid()) {
+		candidate.thumbnail = item.preview;
+	} else if (file_type_icons.has(actual_type)) {
+		candidate.thumbnail = *file_type_icons.lookup_ptr(actual_type);
+	} else if (has_theme_icon(actual_type, EditorStringName(EditorIcons))) {
+		candidate.thumbnail = get_editor_theme_icon(actual_type);
+		file_type_icons.insert(actual_type, candidate.thumbnail);
+	} else {
+		candidate.thumbnail = *file_type_icons.lookup_ptr("__default_icon");
+	}
+}
+
+void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &candidate, const FuzzySearchResult &result) {
+	_setup_candidate(candidate, result.target);
+	candidate.result = &result;
+}
+
 void QuickOpenResultContainer::update_results() {
-	_score_and_sort_candidates();
+	showing_history = false;
+	candidates.clear();
+	if (query.is_empty()) {
+		_use_default_candidates();
+	} else {
+		_score_and_sort_candidates();
+	}
 	_update_result_items(MIN(candidates.size(), max_total_results), 0);
 }
 
-void QuickOpenResultContainer::_score_and_sort_candidates() {
-	candidates.clear();
-
-	if (query.is_empty()) {
-		return;
+void QuickOpenResultContainer::_use_default_candidates() {
+	if (filepaths.size() <= SHOW_ALL_FILES_THRESHOLD) {
+		candidates.resize(filepaths.size());
+		QuickOpenResultCandidate *candidates_write = candidates.ptrw();
+		for (const String &filepath : filepaths) {
+			_setup_candidate(*candidates_write++, filepath);
+		}
+	} else if (base_types.size() == 1) {
+		Vector<QuickOpenResultCandidate> *history = selected_history.lookup_ptr(base_types[0]);
+		if (history) {
+			showing_history = true;
+			candidates.append_array(*history);
+		}
 	}
+}
 
+void QuickOpenResultContainer::_update_fuzzy_search_results() {
+	FuzzySearch fuzzy_search;
+	fuzzy_search.start_offset = 6; // Don't match against "res://"
 	fuzzy_search.set_query(query);
 	fuzzy_search.max_results = max_total_results;
 	bool fuzzy_matching = EDITOR_GET("filesystem/quick_open_dialog/enable_fuzzy_matching");
-	int max_misses = EDITOR_GET(MAX_MISSES_SETTING);
+	int max_misses = EDITOR_GET("filesystem/quick_open_dialog/max_fuzzy_misses");
 	fuzzy_search.allow_subsequences = fuzzy_matching;
 	fuzzy_search.max_misses = fuzzy_matching ? max_misses : 0;
-
 	fuzzy_search.search_all(filepaths, search_results);
+}
+
+void QuickOpenResultContainer::_score_and_sort_candidates() {
+	_update_fuzzy_search_results();
 	candidates.resize(search_results.size());
 	QuickOpenResultCandidate *candidates_write = candidates.ptrw();
-
 	for (const FuzzySearchResult &result : search_results) {
-		const String &filepath = result.target;
-		StringName actual_type = *filetypes.lookup_ptr(filepath);
-		QuickOpenResultCandidate candidate;
-		candidate.file_name = filepath.get_file();
-		candidate.file_directory = filepath.get_base_dir();
-		candidate.result = &result;
-
-		EditorResourcePreview::PreviewItem item = EditorResourcePreview::get_singleton()->get_resource_preview_if_available(filepath);
-		if (item.preview.is_valid()) {
-			candidate.thumbnail = item.preview;
-		} else if (file_type_icons.has(actual_type)) {
-			candidate.thumbnail = *file_type_icons.lookup_ptr(actual_type);
-		} else if (has_theme_icon(actual_type, EditorStringName(EditorIcons))) {
-			candidate.thumbnail = get_editor_theme_icon(actual_type);
-			file_type_icons.insert(actual_type, candidate.thumbnail);
-		} else {
-			candidate.thumbnail = *file_type_icons.lookup_ptr("__default_icon");
-		}
-
-		*candidates_write++ = candidate;
+		_setup_candidate(*candidates_write++, result);
 	}
 }
 
 void QuickOpenResultContainer::_update_result_items(int p_new_visible_results_count, int p_new_selection_index) {
-	List<QuickOpenResultCandidate> *type_history = nullptr;
-
-	showing_history = false;
-
-	if (query.is_empty()) {
-		if (candidates.size() <= SHOW_ALL_FILES_THRESHOLD) {
-			p_new_visible_results_count = candidates.size();
-		} else {
-			p_new_visible_results_count = 0;
-
-			if (base_types.size() == 1) {
-				type_history = selected_history.lookup_ptr(base_types[0]);
-				if (type_history) {
-					p_new_visible_results_count = type_history->size();
-					showing_history = true;
-				}
-			}
-		}
-	}
-
 	// Only need to update items that were not hidden in previous update.
 	int num_items_needing_updates = MAX(num_visible_results, p_new_visible_results_count);
 	num_visible_results = p_new_visible_results_count;
@@ -391,7 +401,7 @@ void QuickOpenResultContainer::_update_result_items(int p_new_visible_results_co
 		QuickOpenResultItem *item = result_items[i];
 
 		if (i < num_visible_results) {
-			item->set_content(type_history ? type_history->get(i) : candidates[i]);
+			item->set_content(candidates[i]);
 		} else {
 			item->reset();
 		}
@@ -530,7 +540,7 @@ void QuickOpenResultContainer::_toggle_fuzzy_search(bool p_pressed) {
 }
 
 void QuickOpenResultContainer::_toggle_include_addons(bool p_pressed) {
-	EditorSettings::get_singleton()->set(INCLUDE_ADDONS_SETTING, p_pressed);
+	EditorSettings::get_singleton()->set("filesystem/quick_open_dialog/include_addons", p_pressed);
 	cleanup();
 	_create_initial_results();
 }
@@ -594,16 +604,7 @@ bool QuickOpenResultContainer::has_nothing_selected() const {
 
 String QuickOpenResultContainer::get_selected() const {
 	ERR_FAIL_COND_V_MSG(has_nothing_selected(), String(), "Tried to get selected file, but nothing was selected.");
-
-	if (showing_history) {
-		const List<QuickOpenResultCandidate> *type_history = selected_history.lookup_ptr(base_types[0]);
-
-		const QuickOpenResultCandidate &c = type_history->get(selection_index);
-		return c.file_directory.path_join(c.file_name);
-	} else {
-		const QuickOpenResultCandidate &c = candidates[selection_index];
-		return c.file_directory.path_join(c.file_name);
-	}
+	return candidates[selection_index].file_path;
 }
 
 QuickOpenDisplayMode QuickOpenResultContainer::get_adaptive_display_mode(const Vector<StringName> &p_base_types) {
@@ -631,32 +632,27 @@ void QuickOpenResultContainer::save_selected_item() {
 		return;
 	}
 
-	if (showing_history) {
-		// Selecting from history, so already added.
-		return;
-	}
-
 	const StringName &base_type = base_types[0];
+	const QuickOpenResultCandidate &selected = candidates[selection_index];
+	Vector<QuickOpenResultCandidate> *type_history = selected_history.lookup_ptr(base_type);
 
-	List<QuickOpenResultCandidate> *type_history = selected_history.lookup_ptr(base_type);
 	if (!type_history) {
-		selected_history.insert(base_type, List<QuickOpenResultCandidate>());
+		selected_history.insert(base_type, Vector<QuickOpenResultCandidate>());
 		type_history = selected_history.lookup_ptr(base_type);
 	} else {
-		const QuickOpenResultCandidate &selected = candidates[selection_index];
-
-		for (const QuickOpenResultCandidate &candidate : *type_history) {
-			if (candidate.file_directory == selected.file_directory && candidate.file_name == selected.file_name) {
-				return;
+		for (int i = 0; i < type_history->size(); i++) {
+			if (selected.file_path == type_history->get(i).file_path) {
+				type_history->remove_at(i);
+				break;
 			}
-		}
-
-		if (type_history->size() > 8) {
-			type_history->pop_back();
 		}
 	}
 
-	type_history->push_front(candidates[selection_index]);
+	type_history->insert(0, selected);
+	type_history->ptrw()->result = nullptr;
+	if (type_history->size() > MAX_HISTORY_SIZE) {
+		type_history->resize(MAX_HISTORY_SIZE);
+	}
 }
 
 void QuickOpenResultContainer::cleanup() {
@@ -784,7 +780,7 @@ void QuickOpenResultItem::draw_search_highlights() {
 	}
 
 	Vector2i offset = item->get_position() + MAGIC_HIGHLIGHT_OFFSET * EDSCALE;
-	for (Rect2i rect : highlights) {
+	for (Rect2i &rect : highlights) {
 		rect.position += offset;
 		draw_rect(rect, Color(1, 1, 1, 0.07), true);
 		draw_rect(rect, Color(0.5, 0.7, 1.0, 0.4), false, 1);

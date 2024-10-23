@@ -109,7 +109,7 @@ FuzzySearchTestOutcome get_top_result_and_count(String &p_query, Vector<String> 
 	search.max_results = p_max_results;
 	Vector<FuzzySearchResult> results;
 	search.search_all(p_lines, results);
-	return { results.size() > 0 ? results[0].target : "<no result>", (int) results.size() };
+	return { results.size() > 0 ? results[0].target : "<no result>", (int)results.size() };
 }
 
 FuzzySearchBenchmarkResult bench(String p_query, Vector<String> p_targets) {
@@ -130,7 +130,6 @@ FuzzySearchBenchmarkResult bench(String p_query, Vector<String> p_targets) {
 	}
 
 	return { calculate_mean(timings), calculate_std_dev(timings), result };
-
 }
 
 /*

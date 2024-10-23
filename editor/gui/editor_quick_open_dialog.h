@@ -31,7 +31,6 @@
 #ifndef EDITOR_QUICK_OPEN_DIALOG_H
 #define EDITOR_QUICK_OPEN_DIALOG_H
 
-#include "core/string/fuzzy_search.h"
 #include "core/templates/oa_hash_map.h"
 #include "scene/gui/dialogs.h"
 
@@ -49,6 +48,8 @@ class Texture2D;
 class TextureRect;
 class VBoxContainer;
 
+class FuzzySearchResult;
+
 class QuickOpenResultItem;
 
 enum class QuickOpenDisplayMode {
@@ -57,6 +58,7 @@ enum class QuickOpenDisplayMode {
 };
 
 struct QuickOpenResultCandidate {
+	String file_path;
 	String file_name;
 	String file_directory;
 
@@ -86,16 +88,16 @@ protected:
 	void _notification(int p_what);
 
 private:
-	static const int SHOW_ALL_FILES_THRESHOLD = 30;
+	static constexpr int SHOW_ALL_FILES_THRESHOLD = 30;
+	static constexpr int MAX_HISTORY_SIZE = 20;
 
-	FuzzySearch fuzzy_search;
 	Vector<FuzzySearchResult> search_results;
 	Vector<StringName> base_types;
 	Vector<String> filepaths;
 	OAHashMap<String, StringName> filetypes;
 	Vector<QuickOpenResultCandidate> candidates;
 
-	OAHashMap<StringName, List<QuickOpenResultCandidate>> selected_history;
+	OAHashMap<StringName, Vector<QuickOpenResultCandidate>> selected_history;
 
 	String query;
 	int selection_index = -1;
@@ -128,6 +130,10 @@ private:
 	void _create_initial_results();
 	void _find_filepaths_in_folder(EditorFileSystemDirectory *p_directory, bool p_include_addons);
 
+	void _setup_candidate(QuickOpenResultCandidate &candidate, const String &filepath);
+	void _setup_candidate(QuickOpenResultCandidate &candidate, const FuzzySearchResult &result);
+	void _update_fuzzy_search_results();
+	void _use_default_candidates();
 	void _score_and_sort_candidates();
 	void _update_result_items(int p_new_visible_results_count, int p_new_selection_index);
 

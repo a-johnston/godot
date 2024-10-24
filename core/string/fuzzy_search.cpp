@@ -60,23 +60,25 @@ bool is_word_boundary(const String &str, int index) {
 }
 
 bool FuzzySearchToken::try_exact_match(FuzzyTokenMatch &p_match, const String &p_target, int p_offset) const {
-	p_match.token = this;
-	int idx = p_target.find(string, p_offset);
-	if (idx == -1) {
+	p_match.token_idx = idx;
+	p_match.token_length = string.length();
+	int match_idx = p_target.find(string, p_offset);
+	if (match_idx == -1) {
 		return false;
 	}
-	p_match.add_substring(idx, length());
+	p_match.add_substring(match_idx, string.length());
 	return true;
 }
 
 bool FuzzySearchToken::try_fuzzy_match(FuzzyTokenMatch &p_match, const String &p_target, int p_offset, int p_miss_budget) const {
-	p_match.token = this;
+	p_match.token_idx = idx;
+	p_match.token_length = string.length();
 	int run_start = -1;
 	int run_len = 0;
 
 	// Search for the subsequence p_token in p_target starting from p_offset, recording each substring for
 	// later scoring and display.
-	for (int i = 0; i < length(); i++) {
+	for (int i = 0; i < string.length(); i++) {
 		int new_offset = p_target.find_char(string[i], p_offset);
 		if (new_offset < 0) {
 			if (--p_miss_budget < 0) {
@@ -166,7 +168,7 @@ void FuzzySearchResult::score_token_match(FuzzyTokenMatch &p_match, bool p_case_
 			substring_score += 4;
 		}
 		// Score exact query matches higher than non-compact subsequence matches
-		if (substring.y == p_match.token->length()) {
+		if (substring.y == p_match.token_length) {
 			substring_score += 100;
 		}
 		p_match.score += substring_score;
@@ -175,20 +177,18 @@ void FuzzySearchResult::score_token_match(FuzzyTokenMatch &p_match, bool p_case_
 
 void FuzzySearchResult::maybe_apply_score_bonus() {
 	// This adds a small bonus to results which match tokens in the same order they appear in the query.
-	struct TokenMatchComparator {
-		bool operator()(const FuzzyTokenMatch &A, const FuzzyTokenMatch &B) const {
-			return A.token->idx < B.token->idx;
-		}
-	};
+	int *token_range_starts = (int *)alloca(sizeof(int) * token_matches.size());
 
-	token_matches.sort_custom<TokenMatchComparator>();
-
-	int start = -1;
 	for (const FuzzyTokenMatch &match : token_matches) {
-		if (is_valid_interval(match.interval) && match.interval.x < start) {
+		token_range_starts[match.token_idx] = match.interval.x;
+	}
+
+	int last = token_range_starts[0];
+	for (int i = 1; i < token_matches.size(); i++) {
+		if (last > token_range_starts[i]) {
 			return;
 		}
-		start = match.interval.x;
+		last = token_range_starts[i];
 	}
 
 	score += 1;
@@ -209,7 +209,7 @@ void remove_low_scores(Vector<FuzzySearchResult> &p_results, const float p_cull_
 
 	while (true) {
 		// Advances i to an element to remove and j to an element to keep.
-		while (j > i && results[j].score < p_cull_score)
+		while (j >= i && results[j].score < p_cull_score)
 			j--;
 		while (i < j && results[i].score >= p_cull_score)
 			i++;
@@ -273,10 +273,10 @@ void FuzzySearch::set_query(const String &p_query) {
 
 	struct TokenComparator {
 		bool operator()(const FuzzySearchToken &A, const FuzzySearchToken &B) const {
-			if (A.length() == B.length()) {
+			if (A.string.length() == B.string.length()) {
 				return A.idx < B.idx;
 			}
-			return A.length() > B.length();
+			return A.string.length() > B.string.length();
 		}
 	};
 
@@ -312,7 +312,7 @@ bool FuzzySearch::search(const String &p_target, FuzzySearchResult &p_result) co
 			}
 			if (p_result.can_add_token_match(match)) {
 				p_result.score_token_match(match, match.is_case_insensitive(p_target, adjusted_target));
-				if (best_match.token == nullptr || best_match.score < match.score) {
+				if (best_match.token_idx == -1 || best_match.score < match.score) {
 					best_match = match;
 				}
 			}
@@ -323,7 +323,7 @@ bool FuzzySearch::search(const String &p_target, FuzzySearchResult &p_result) co
 			}
 		}
 
-		if (best_match.token == nullptr) {
+		if (best_match.token_idx == -1) {
 			return false;
 		}
 

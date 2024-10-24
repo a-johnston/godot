@@ -82,7 +82,6 @@ public:
 	void cleanup();
 
 	QuickOpenResultContainer();
-	~QuickOpenResultContainer();
 
 protected:
 	void _notification(int p_what);
@@ -127,6 +126,7 @@ private:
 
 	static QuickOpenDisplayMode get_adaptive_display_mode(const Vector<StringName> &p_base_types);
 
+	void _ensure_result_vector_capacity();
 	void _create_initial_results();
 	void _find_filepaths_in_folder(EditorFileSystemDirectory *p_directory, bool p_include_addons);
 
@@ -142,6 +142,8 @@ private:
 
 	void _item_input(const Ref<InputEvent> &p_ev, int p_index);
 
+	CanvasItem *_get_result_root();
+	void _layout_result_item(QuickOpenResultItem *item);
 	void _set_display_mode(QuickOpenDisplayMode p_display_mode);
 	void _toggle_display_mode();
 	void _toggle_include_addons(bool p_pressed);

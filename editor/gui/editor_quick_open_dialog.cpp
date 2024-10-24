@@ -103,7 +103,7 @@ void EditorQuickOpenDialog::popup_dialog(const Vector<StringName> &p_base_types,
 	get_ok_button()->set_disabled(container->has_nothing_selected());
 
 	set_title(get_dialog_title(p_base_types));
-	popup_centered_clamped(Size2(655, 650) * EDSCALE, 0.8f);
+	popup_centered_clamped(Size2(780, 650) * EDSCALE, 0.8f);
 	search_box->grab_focus();
 }
 
@@ -230,26 +230,27 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 			hbc->add_child(display_mode_toggle);
 		}
 	}
+}
 
-	// Creating and deleting nodes while searching is slow, so we allocate
-	// a bunch of result nodes and fill in the content based on result ranking.
-	result_items.resize(EDITOR_GET("filesystem/quick_open_dialog/max_results"));
-	for (int i = 0; i < result_items.size(); i++) {
+void QuickOpenResultContainer::_ensure_result_vector_capacity() {
+	int target_size = EDITOR_GET("filesystem/quick_open_dialog/max_results");
+	int initial_size = result_items.size();
+	for (int i = target_size; i < initial_size; i++) {
+		result_items[i]->queue_free();
+	}
+	result_items.resize(target_size);
+	for (int i = initial_size; i < target_size; i++) {
 		QuickOpenResultItem *item = memnew(QuickOpenResultItem);
 		item->connect(SceneStringName(gui_input), callable_mp(this, &QuickOpenResultContainer::_item_input).bind(i));
 		result_items.write[i] = item;
-	}
-}
-
-QuickOpenResultContainer::~QuickOpenResultContainer() {
-	if (never_opened) {
-		for (QuickOpenResultItem *E : result_items) {
-			memdelete(E);
+		if (!never_opened) {
+			_layout_result_item(item);
 		}
 	}
 }
 
 void QuickOpenResultContainer::init(const Vector<StringName> &p_base_types) {
+	_ensure_result_vector_capacity();
 	base_types = p_base_types;
 
 	const int display_mode_behavior = EDITOR_GET("filesystem/quick_open_dialog/default_display_mode");
@@ -550,39 +551,40 @@ void QuickOpenResultContainer::_toggle_display_mode() {
 	_set_display_mode(new_display_mode);
 }
 
-void QuickOpenResultContainer::_set_display_mode(QuickOpenDisplayMode p_display_mode) {
-	content_display_mode = p_display_mode;
-	EditorSettings::get_singleton()->set_project_metadata("quick_open_dialog", "last_mode", (int)content_display_mode);
+CanvasItem *QuickOpenResultContainer::_get_result_root() {
+	if (content_display_mode == QuickOpenDisplayMode::LIST) {
+		return list;
+	} else {
+		return grid;
+	}
+}
 
-	const bool show_list = (content_display_mode == QuickOpenDisplayMode::LIST);
-	if ((show_list && list->is_visible()) || (!show_list && grid->is_visible())) {
+void QuickOpenResultContainer::_layout_result_item(QuickOpenResultItem *item) {
+	item->set_display_mode(content_display_mode);
+	Node *parent = item->get_parent();
+	if (parent) {
+		parent->remove_child(item);
+	}
+	_get_result_root()->add_child(item);
+}
+
+void QuickOpenResultContainer::_set_display_mode(QuickOpenDisplayMode p_display_mode) {
+	CanvasItem *prev_root = _get_result_root();
+
+	if (prev_root->is_visible() && content_display_mode == p_display_mode) {
 		return;
 	}
 
+	content_display_mode = p_display_mode;
+	CanvasItem *next_root = _get_result_root();
+
+	EditorSettings::get_singleton()->set_project_metadata("quick_open_dialog", "last_mode", (int)content_display_mode);
+
 	hide();
-
-	// Move result item nodes from one container to the other.
-	CanvasItem *prev_root;
-	CanvasItem *next_root;
-	if (content_display_mode == QuickOpenDisplayMode::LIST) {
-		prev_root = Object::cast_to<CanvasItem>(grid);
-		next_root = Object::cast_to<CanvasItem>(list);
-	} else {
-		prev_root = Object::cast_to<CanvasItem>(list);
-		next_root = Object::cast_to<CanvasItem>(grid);
-	}
-
-	const bool first_time = !list->is_visible() && !grid->is_visible();
 
 	prev_root->hide();
 	for (QuickOpenResultItem *item : result_items) {
-		item->set_display_mode(content_display_mode);
-
-		if (!first_time) {
-			prev_root->remove_child(item);
-		}
-
-		next_root->add_child(item);
+		_layout_result_item(item);
 	}
 	next_root->show();
 	show();

@@ -39,7 +39,6 @@ struct FuzzySearchToken {
 	int idx;
 	String string;
 
-	int length() const { return string.length(); };
 	bool try_exact_match(FuzzyTokenMatch &p_match, const String &p_target, int p_offset) const;
 	bool try_fuzzy_match(FuzzyTokenMatch &p_match, const String &p_target, int p_offset, int p_miss_budget) const;
 };
@@ -50,13 +49,14 @@ class FuzzyTokenMatch {
 	friend class FuzzySearch;
 
 	int matched_length = 0;
-	const FuzzySearchToken *token = nullptr;
+	int token_length = 0;
+	int token_idx = -1;
 	Vector2i interval = Vector2i(-1, -1); // x and y are both inclusive indices
 
 	void add_substring(int substring_start, int substring_length);
 	bool intersects(const Vector2i &other_interval) const;
 	bool is_case_insensitive(const String &p_original, const String &p_adjusted) const;
-	int get_miss_count() const { return token->length() - matched_length; };
+	int get_miss_count() const { return token_length - matched_length; };
 
 public:
 	int score = 0;

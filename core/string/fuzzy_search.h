@@ -36,7 +36,7 @@
 class FuzzyTokenMatch;
 
 struct FuzzySearchToken {
-	int idx;
+	int idx = -1;
 	String string;
 
 	bool try_exact_match(FuzzyTokenMatch &p_match, const String &p_target, int p_offset) const;

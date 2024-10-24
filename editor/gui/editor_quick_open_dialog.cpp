@@ -183,52 +183,45 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 	}
 
 	{
-		// Bottom bar
-		HBoxContainer *bottom_bar = memnew(HBoxContainer);
-		bottom_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		add_child(bottom_bar);
-
+		// Selected filepath
 		file_details_path = memnew(Label);
 		file_details_path->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 		file_details_path->set_horizontal_alignment(HorizontalAlignment::HORIZONTAL_ALIGNMENT_CENTER);
 		file_details_path->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
-		bottom_bar->add_child(file_details_path);
+		add_child(file_details_path);
+	}
 
-		{
-			HBoxContainer *hbc = memnew(HBoxContainer);
-			hbc->add_theme_constant_override("separation", 3);
-			bottom_bar->add_child(hbc);
+	{
+		// Bottom bar
+		HBoxContainer *bottom_bar = memnew(HBoxContainer);
+		bottom_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		bottom_bar->set_alignment(ALIGNMENT_END);
+		bottom_bar->add_theme_constant_override("separation", 3);
+		add_child(bottom_bar);
 
-			Label *fuzzy_search_label = memnew(Label);
-			fuzzy_search_label->set_text(TTR("Fuzzy Search"));
-			hbc->add_child(fuzzy_search_label);
+		fuzzy_search_toggle = memnew(CheckButton);
+		style_button(fuzzy_search_toggle);
+		fuzzy_search_toggle->set_text(TTR("Fuzzy Search"));
+		fuzzy_search_toggle->set_tooltip_text(TTR("Enable fuzzy matching"));
+		fuzzy_search_toggle->connect(SceneStringName(toggled), callable_mp(this, &QuickOpenResultContainer::_toggle_fuzzy_search));
+		bottom_bar->add_child(fuzzy_search_toggle);
 
-			fuzzy_search_toggle = memnew(CheckButton);
-			style_button(fuzzy_search_toggle);
-			fuzzy_search_toggle->set_tooltip_text(TTR("Enable fuzzy matching"));
-			fuzzy_search_toggle->connect(SceneStringName(toggled), callable_mp(this, &QuickOpenResultContainer::_toggle_fuzzy_search));
-			hbc->add_child(fuzzy_search_toggle);
+		include_addons_toggle = memnew(CheckButton);
+		style_button(include_addons_toggle);
+		include_addons_toggle->set_text(TTR("Addons"));
+		include_addons_toggle->set_tooltip_text(TTR("Include files from addons"));
+		include_addons_toggle->connect(SceneStringName(toggled), callable_mp(this, &QuickOpenResultContainer::_toggle_include_addons));
+		bottom_bar->add_child(include_addons_toggle);
 
-			Label *include_addons_label = memnew(Label);
-			include_addons_label->set_text(TTR("Addons"));
-			hbc->add_child(include_addons_label);
+		VSeparator *vsep = memnew(VSeparator);
+		vsep->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
+		vsep->set_custom_minimum_size(Size2i(0, 14 * EDSCALE));
+		bottom_bar->add_child(vsep);
 
-			include_addons_toggle = memnew(CheckButton);
-			style_button(include_addons_toggle);
-			include_addons_toggle->set_tooltip_text(TTR("Include files from addons"));
-			include_addons_toggle->connect(SceneStringName(toggled), callable_mp(this, &QuickOpenResultContainer::_toggle_include_addons));
-			hbc->add_child(include_addons_toggle);
-
-			VSeparator *vsep = memnew(VSeparator);
-			vsep->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
-			vsep->set_custom_minimum_size(Size2i(0, 14 * EDSCALE));
-			hbc->add_child(vsep);
-
-			display_mode_toggle = memnew(Button);
-			style_button(display_mode_toggle);
-			display_mode_toggle->connect(SceneStringName(pressed), callable_mp(this, &QuickOpenResultContainer::_toggle_display_mode));
-			hbc->add_child(display_mode_toggle);
-		}
+		display_mode_toggle = memnew(Button);
+		style_button(display_mode_toggle);
+		display_mode_toggle->connect(SceneStringName(pressed), callable_mp(this, &QuickOpenResultContainer::_toggle_display_mode));
+		bottom_bar->add_child(display_mode_toggle);
 	}
 }
 

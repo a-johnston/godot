@@ -30,11 +30,10 @@
 
 #include "fuzzy_search.h"
 
-#include "core/string/ustring.h"
 #include "core/variant/variant.h"
 
-const float cull_factor = 0.1f;
-const float cull_cutoff = 30.0f;
+constexpr float cull_factor = 0.1f;
+constexpr float cull_cutoff = 30.0f;
 const String boundary_chars = "/\\-_.";
 
 bool is_valid_interval(const Vector2i &p_interval) {
@@ -81,7 +80,8 @@ bool FuzzySearchToken::try_fuzzy_match(FuzzyTokenMatch &p_match, const String &p
 	for (int i = 0; i < string.length(); i++) {
 		int new_offset = p_target.find_char(string[i], p_offset);
 		if (new_offset < 0) {
-			if (--p_miss_budget < 0) {
+			p_miss_budget--;
+			if (p_miss_budget < 0) {
 				return false;
 			}
 		} else {
@@ -201,7 +201,7 @@ void FuzzySearchResult::add_token_match(const FuzzyTokenMatch &p_match) {
 	token_matches.append(p_match);
 }
 
-void remove_low_scores(Vector<FuzzySearchResult> &p_results, const float p_cull_score) {
+void remove_low_scores(Vector<FuzzySearchResult> &p_results, float p_cull_score) {
 	// Removes all results with score < p_cull_score in-place.
 	int i = 0;
 	int j = p_results.size() - 1;
@@ -209,12 +209,15 @@ void remove_low_scores(Vector<FuzzySearchResult> &p_results, const float p_cull_
 
 	while (true) {
 		// Advances i to an element to remove and j to an element to keep.
-		while (j >= i && results[j].score < p_cull_score)
+		while (j >= i && results[j].score < p_cull_score) {
 			j--;
-		while (i < j && results[i].score >= p_cull_score)
+		}
+		while (i < j && results[i].score >= p_cull_score) {
 			i++;
-		if (i >= j)
+		}
+		if (i >= j) {
 			break;
+		}
 		results[i++] = results[j--];
 	}
 
@@ -266,7 +269,7 @@ void FuzzySearch::sort_and_filter(Vector<FuzzySearchResult> &p_results) const {
 void FuzzySearch::set_query(const String &p_query) {
 	tokens.clear();
 	for (const String &string : p_query.split(" ", false)) {
-		tokens.append({ (int)tokens.size(), string });
+		tokens.append({ static_cast<int>(tokens.size()), string });
 	}
 
 	case_sensitive = !p_query.is_lowercase();

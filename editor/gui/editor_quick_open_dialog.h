@@ -59,11 +59,22 @@ enum class QuickOpenDisplayMode {
 
 struct QuickOpenResultCandidate {
 	String file_path;
-	String file_name;
-	String file_directory;
-
 	Ref<Texture2D> thumbnail;
 	const FuzzySearchResult *result;
+};
+
+class HighlightedLabel : public Label {
+	GDCLASS(HighlightedLabel, Label)
+
+	Vector<Rect2i> highlights;
+
+public:
+	Rect2i get_substr_rect(const Vector2i &p_interval);
+	void add_highlight(const Vector2i &p_interval);
+	void reset_highlights();
+
+protected:
+	void _notification(int p_notification);
 };
 
 class QuickOpenResultContainer : public VBoxContainer {
@@ -158,17 +169,14 @@ class QuickOpenResultGridItem : public VBoxContainer {
 public:
 	QuickOpenResultGridItem();
 
-	const FuzzySearchResult *result;
-
-	void set_content(const QuickOpenResultCandidate &p_candidate);
-	Vector<Rect2i> get_search_highlights();
 	void reset();
+	void set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight);
 	void highlight_item(const Color &p_color);
 	void remove_highlight();
 
 private:
 	TextureRect *thumbnail = nullptr;
-	Label *name = nullptr;
+	HighlightedLabel *name = nullptr;
 };
 
 class QuickOpenResultListItem : public HBoxContainer {
@@ -177,11 +185,8 @@ class QuickOpenResultListItem : public HBoxContainer {
 public:
 	QuickOpenResultListItem();
 
-	const FuzzySearchResult *result;
-
-	void set_content(const QuickOpenResultCandidate &p_candidate);
-	Vector<Rect2i> get_search_highlights();
 	void reset();
+	void set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight);
 	void highlight_item(const Color &p_color);
 	void remove_highlight();
 
@@ -195,8 +200,8 @@ private:
 	VBoxContainer *text_container = nullptr;
 
 	TextureRect *thumbnail = nullptr;
-	Label *name = nullptr;
-	Label *path = nullptr;
+	HighlightedLabel *name = nullptr;
+	HighlightedLabel *path = nullptr;
 };
 
 class QuickOpenResultItem : public HBoxContainer {
@@ -207,11 +212,10 @@ public:
 
 	bool enable_highlights = true;
 
+	void reset();
 	void set_content(const QuickOpenResultCandidate &p_candidate);
 	void set_display_mode(QuickOpenDisplayMode p_display_mode);
-	void reset();
 	void highlight_item(bool p_enabled);
-	void draw_search_highlights();
 
 protected:
 	void _notification(int p_what);

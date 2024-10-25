@@ -30,8 +30,6 @@
 
 #include "fuzzy_search.h"
 
-#include "core/variant/variant.h"
-
 constexpr float cull_factor = 0.1f;
 constexpr float cull_cutoff = 30.0f;
 const String boundary_chars = "/\\-_.";

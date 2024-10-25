@@ -46,7 +46,48 @@
 #include "scene/gui/texture_rect.h"
 #include "scene/gui/tree.h"
 
-const Vector2i MAGIC_HIGHLIGHT_OFFSET = { 4, 5 };
+Rect2i HighlightedLabel::get_substr_rect(const Vector2i &p_substr) {
+	Ref<Font> font = get_theme_font(SceneStringName(font));
+	int font_size = get_theme_font_size(SceneStringName(font_size));
+	Vector2i prefix = font->get_string_size(get_text().substr(0, p_substr.x), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size);
+	prefix.y = 0;
+	Vector2i size = font->get_string_size(get_text().substr(p_substr.x, p_substr.y), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size);
+	return { prefix, size };
+}
+
+void HighlightedLabel::add_highlight(const Vector2i &p_interval) {
+	if (p_interval.x != -1) {
+		highlights.append(get_substr_rect(p_interval));
+		queue_redraw();
+	}
+}
+
+void HighlightedLabel::reset_highlights() {
+	highlights.clear();
+	queue_redraw();
+}
+
+void HighlightedLabel::_notification(int p_notification) {
+	if (p_notification == NOTIFICATION_DRAW) {
+		if (highlights.is_empty()) {
+			return;
+		}
+
+		Vector2i offset = get_character_bounds(0).position;
+		int max_width = get_size().x - 5 * EDSCALE;
+
+		// NB: The highlight rect is computed exclusively based on the assigned text, but layout related values
+		//  are only added in here each time the label is drawn.
+		for (Rect2i rect : highlights) {
+			rect.position += offset;
+			rect.size.x = MIN(rect.size.x, max_width - rect.position.x);
+			if (rect.size.x > 0) {
+				draw_rect(rect, Color(1, 1, 1, 0.07), true);
+				draw_rect(rect, Color(0.5, 0.7, 1.0, 0.4), false, 1);
+			}
+		}
+	}
+}
 
 EditorQuickOpenDialog::EditorQuickOpenDialog() {
 	VBoxContainer *vbc = memnew(VBoxContainer);
@@ -316,8 +357,6 @@ void QuickOpenResultContainer::set_query_and_update(const String &p_query) {
 void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &candidate, const String &filepath) {
 	StringName actual_type = *filetypes.lookup_ptr(filepath);
 	candidate.file_path = filepath;
-	candidate.file_name = filepath.get_file();
-	candidate.file_directory = filepath.get_base_dir();
 	candidate.result = nullptr;
 
 	EditorResourcePreview::PreviewItem item = EditorResourcePreview::get_singleton()->get_resource_preview_if_available(filepath);
@@ -573,14 +612,12 @@ void QuickOpenResultContainer::_set_display_mode(QuickOpenDisplayMode p_display_
 
 	EditorSettings::get_singleton()->set_project_metadata("quick_open_dialog", "last_mode", (int)content_display_mode);
 
-	hide();
-
 	prev_root->hide();
+	next_root->show();
+
 	for (QuickOpenResultItem *item : result_items) {
 		_layout_result_item(item);
 	}
-	next_root->show();
-	show();
 
 	_update_result_items(num_visible_results, selection_index);
 
@@ -717,9 +754,9 @@ void QuickOpenResultItem::set_content(const QuickOpenResultCandidate &p_candidat
 	_set_enabled(true);
 
 	if (list_item->is_visible()) {
-		list_item->set_content(p_candidate);
+		list_item->set_content(p_candidate, enable_highlights);
 	} else {
-		grid_item->set_content(p_candidate);
+		grid_item->set_content(p_candidate, enable_highlights);
 	}
 
 	queue_redraw();
@@ -754,34 +791,6 @@ void QuickOpenResultItem::highlight_item(bool p_enabled) {
 	queue_redraw();
 }
 
-void QuickOpenResultItem::draw_search_highlights() {
-	if (dirty_highlights) {
-		// When initially switching layouts, the new sub-item has not yet been positioned, so this
-		// delays finding and drawing highlights until after that happens.
-		dirty_highlights = false;
-		callable_mp(Object::cast_to<CanvasItem>(this), &CanvasItem::queue_redraw).call_deferred();
-		return;
-	}
-
-	Control *item;
-	Vector<Rect2i> highlights;
-
-	if (list_item->is_visible()) {
-		item = list_item;
-		highlights = list_item->get_search_highlights();
-	} else {
-		item = grid_item;
-		highlights = grid_item->get_search_highlights();
-	}
-
-	Vector2i offset = item->get_position() + MAGIC_HIGHLIGHT_OFFSET * EDSCALE;
-	for (Rect2i &rect : highlights) {
-		rect.position += offset;
-		draw_rect(rect, Color(1, 1, 1, 0.07), true);
-		draw_rect(rect, Color(0.5, 0.7, 1.0, 0.4), false, 1);
-	}
-}
-
 void QuickOpenResultItem::_set_enabled(bool p_enabled) {
 	set_visible(p_enabled);
 	set_process(p_enabled);
@@ -801,9 +810,6 @@ void QuickOpenResultItem::_notification(int p_what) {
 			highlighted_font_color = get_theme_color("font_focus_color", EditorStringName(Editor));
 		} break;
 		case NOTIFICATION_DRAW: {
-			if (enable_highlights) {
-				draw_search_highlights();
-			}
 			if (is_selected) {
 				draw_style_box(selected_stylebox, Rect2(Point2(), get_size()));
 			} else if (is_hovering) {
@@ -829,13 +835,6 @@ Vector2i get_name_interval(const Vector2i &p_interval, const int p_dir_index) {
 	int first_name_idx = p_dir_index + 1;
 	int start = MAX(p_interval.x, first_name_idx);
 	return { start - first_name_idx, p_interval.y - start + p_interval.x };
-}
-
-Rect2i get_highlight_region(Ref<Font> &p_font, const int p_font_size, const String &p_string, const Vector2i p_substr) {
-	Vector2i prefix = p_font->get_string_size(p_string.substr(0, p_substr.x), HORIZONTAL_ALIGNMENT_LEFT, -1, p_font_size);
-	prefix.y = 0;
-	Vector2i size = p_font->get_string_size(p_string.substr(p_substr.x, p_substr.y), HORIZONTAL_ALIGNMENT_LEFT, -1, p_font_size);
-	return { prefix, size };
 }
 
 QuickOpenResultListItem::QuickOpenResultListItem() {
@@ -865,13 +864,13 @@ QuickOpenResultListItem::QuickOpenResultListItem() {
 		text_container->set_v_size_flags(Control::SIZE_FILL);
 		add_child(text_container);
 
-		name = memnew(Label);
+		name = memnew(HighlightedLabel);
 		name->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 		name->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 		name->set_horizontal_alignment(HorizontalAlignment::HORIZONTAL_ALIGNMENT_LEFT);
 		text_container->add_child(name);
 
-		path = memnew(Label);
+		path = memnew(HighlightedLabel);
 		path->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 		path->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 		path->add_theme_font_size_override(SceneStringName(font_size), 12 * EDSCALE);
@@ -879,11 +878,21 @@ QuickOpenResultListItem::QuickOpenResultListItem() {
 	}
 }
 
-void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_candidate) {
-	result = p_candidate.result;
+void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight) {
 	thumbnail->set_texture(p_candidate.thumbnail);
-	name->set_text(p_candidate.file_name);
-	path->set_text(p_candidate.file_directory);
+	name->set_text(p_candidate.file_path.get_file());
+	path->set_text(p_candidate.file_path.get_base_dir());
+	name->reset_highlights();
+	path->reset_highlights();
+
+	if (p_highlight) {
+		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
+			for (const Vector2i &interval : match.substrings) {
+				path->add_highlight(get_path_interval(interval, p_candidate.result->dir_index));
+				name->add_highlight(get_name_interval(interval, p_candidate.result->dir_index));
+			}
+		}
+	}
 
 	const int max_size = 32 * EDSCALE;
 	bool uses_icon = p_candidate.thumbnail->get_width() < max_size;
@@ -901,43 +910,12 @@ void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_cand
 	}
 }
 
-Vector<Rect2i> QuickOpenResultListItem::get_search_highlights() {
-	Vector<Rect2i> highlights;
-	Ref<Font> font = get_theme_font(SceneStringName(font));
-
-	if (result == nullptr || font.is_null()) {
-		return highlights;
-	}
-
-	int path_font_size = path->get_theme_font_size(SceneStringName(font_size));
-	int name_font_size = name->get_theme_font_size(SceneStringName(font_size));
-	Vector2i path_position = path->get_screen_position() - get_screen_position();
-	Vector2i name_position = name->get_screen_position() - get_screen_position();
-
-	for (const FuzzyTokenMatch &match : result->token_matches) {
-		for (const Vector2i &interval : match.substrings) {
-			Vector2i path_interval = get_path_interval(interval, result->dir_index);
-			Vector2i name_interval = get_name_interval(interval, result->dir_index);
-			if (path_interval.x != -1) {
-				Rect2i path_highlight = get_highlight_region(font, path_font_size, path->get_text(), path_interval);
-				path_highlight.position += path_position;
-				highlights.append(path_highlight);
-			}
-			if (name_interval.x != -1) {
-				Rect2i name_highlight = get_highlight_region(font, name_font_size, name->get_text(), name_interval);
-				name_highlight.position += name_position;
-				highlights.append(name_highlight);
-			}
-		}
-	}
-	return highlights;
-}
-
 void QuickOpenResultListItem::reset() {
 	thumbnail->set_texture(nullptr);
 	name->set_text("");
 	path->set_text("");
-	result = nullptr;
+	name->reset_highlights();
+	path->reset_highlights();
 }
 
 void QuickOpenResultListItem::highlight_item(const Color &p_color) {
@@ -969,7 +947,7 @@ QuickOpenResultGridItem::QuickOpenResultGridItem() {
 	thumbnail->set_custom_minimum_size(Size2i(120 * EDSCALE, 64 * EDSCALE));
 	add_child(thumbnail);
 
-	name = memnew(Label);
+	name = memnew(HighlightedLabel);
 	name->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	name->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 	name->set_horizontal_alignment(HorizontalAlignment::HORIZONTAL_ALIGNMENT_CENTER);
@@ -977,11 +955,19 @@ QuickOpenResultGridItem::QuickOpenResultGridItem() {
 	add_child(name);
 }
 
-void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_candidate) {
-	result = p_candidate.result;
+void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight) {
 	thumbnail->set_texture(p_candidate.thumbnail);
-	name->set_text(p_candidate.file_name);
-	name->set_tooltip_text(p_candidate.file_name);
+	name->set_text(p_candidate.file_path.get_file());
+	name->set_tooltip_text(p_candidate.file_path);
+	name->reset_highlights();
+
+	if (p_highlight) {
+		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
+			for (const Vector2i &interval : match.substrings) {
+				name->add_highlight(get_name_interval(interval, p_candidate.result->dir_index));
+			}
+		}
+	}
 
 	bool uses_icon = p_candidate.thumbnail->get_width() < (32 * EDSCALE);
 
@@ -994,44 +980,10 @@ void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_cand
 	}
 }
 
-Vector<Rect2i> QuickOpenResultGridItem::get_search_highlights() {
-	Vector<Rect2i> highlights;
-	Ref<Font> font = get_theme_font(SceneStringName(font));
-
-	if (result == nullptr || font.is_null()) {
-		return highlights;
-	}
-
-	int font_size = name->get_theme_font_size(SceneStringName(font_size));
-	Rect2i name_rect = name->get_rect();
-	// Rect and string offsets are to handle centered text and trailing ellipsis
-	name_rect.size.x -= (MAGIC_HIGHLIGHT_OFFSET.x + 5) * EDSCALE;
-	int name_width = font->get_string_size(name->get_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x;
-	// The lower bound was tested to work well with EDSCALE = 1 and EDSCALE = 2
-	int str_offset = MAX(2 * EDSCALE - 1, (name_rect.size.x - name_width) / 2);
-
-	if (!name_rect.has_area()) {
-		return highlights;
-	}
-
-	for (const FuzzyTokenMatch &match : result->token_matches) {
-		for (const Vector2i &interval : match.substrings) {
-			Vector2i name_interval = get_name_interval(interval, result->dir_index);
-			if (name_interval.x != -1) {
-				Rect2i name_highlight = get_highlight_region(font, font_size, name->get_text(), name_interval);
-				name_highlight.position += name_rect.position;
-				name_highlight.position.x += str_offset;
-				highlights.append(name_rect.intersection(name_highlight));
-			}
-		}
-	}
-	return highlights;
-}
-
 void QuickOpenResultGridItem::reset() {
-	name->set_text("");
 	thumbnail->set_texture(nullptr);
-	result = nullptr;
+	name->set_text("");
+	name->reset_highlights();
 }
 
 void QuickOpenResultGridItem::highlight_item(const Color &p_color) {

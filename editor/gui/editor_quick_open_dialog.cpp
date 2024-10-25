@@ -77,7 +77,7 @@ void HighlightedLabel::_notification(int p_notification) {
 		int max_width = get_size().x - 5 * EDSCALE;
 
 		// NB: The highlight rect is computed exclusively based on the assigned text, but layout related values
-		//  are only added in here each time the label is drawn.
+		// are only added in here each time the label is drawn.
 		for (Rect2i rect : highlights) {
 			rect.position += offset;
 			rect.size.x = MIN(rect.size.x, max_width - rect.position.x);
@@ -372,9 +372,9 @@ void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &candid
 	}
 }
 
-void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &candidate, const FuzzySearchResult &result) {
-	_setup_candidate(candidate, result.target);
-	candidate.result = &result;
+void QuickOpenResultContainer::_setup_candidate(QuickOpenResultCandidate &p_candidate, const FuzzySearchResult &p_result) {
+	_setup_candidate(p_candidate, p_result.target);
+	p_candidate.result = &p_result;
 }
 
 void QuickOpenResultContainer::update_results() {
@@ -821,14 +821,14 @@ void QuickOpenResultItem::_notification(int p_what) {
 
 //----------------- List item
 
-Vector2i get_path_interval(const Vector2i &p_interval, const int p_dir_index) {
+static Vector2i _get_path_interval(const Vector2i &p_interval, int p_dir_index) {
 	if (p_interval.x >= p_dir_index || p_interval.y < 1) {
 		return { -1, -1 };
 	}
 	return { p_interval.x, MIN(p_interval.x + p_interval.y, p_dir_index) - p_interval.x };
 }
 
-Vector2i get_name_interval(const Vector2i &p_interval, const int p_dir_index) {
+static Vector2i _get_name_interval(const Vector2i &p_interval, int p_dir_index) {
 	if (p_interval.x + p_interval.y <= p_dir_index || p_interval.y < 1) {
 		return { -1, -1 };
 	}

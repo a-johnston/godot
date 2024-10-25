@@ -60,7 +60,7 @@ enum class QuickOpenDisplayMode {
 struct QuickOpenResultCandidate {
 	String file_path;
 	Ref<Texture2D> thumbnail;
-	const FuzzySearchResult *result;
+	const FuzzySearchResult *result = nullptr;
 };
 
 class HighlightedLabel : public Label {
@@ -141,8 +141,8 @@ private:
 	void _create_initial_results();
 	void _find_filepaths_in_folder(EditorFileSystemDirectory *p_directory, bool p_include_addons);
 
-	void _setup_candidate(QuickOpenResultCandidate &candidate, const String &filepath);
-	void _setup_candidate(QuickOpenResultCandidate &candidate, const FuzzySearchResult &result);
+	void _setup_candidate(QuickOpenResultCandidate &p_candidate, const String &p_filepath);
+	void _setup_candidate(QuickOpenResultCandidate &p_candidate, const FuzzySearchResult &p_result);
 	void _update_fuzzy_search_results();
 	void _use_default_candidates();
 	void _score_and_sort_candidates();
@@ -154,7 +154,7 @@ private:
 	void _item_input(const Ref<InputEvent> &p_ev, int p_index);
 
 	CanvasItem *_get_result_root();
-	void _layout_result_item(QuickOpenResultItem *item);
+	void _layout_result_item(QuickOpenResultItem *p_item);
 	void _set_display_mode(QuickOpenDisplayMode p_display_mode);
 	void _toggle_display_mode();
 	void _toggle_include_addons(bool p_pressed);

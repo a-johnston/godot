@@ -51,16 +51,16 @@ class FuzzyTokenMatch {
 	int matched_length = 0;
 	int token_length = 0;
 	int token_idx = -1;
-	Vector2i interval = Vector2i(-1, -1); // x and y are both inclusive indices
+	Vector2i interval = Vector2i(-1, -1); // x and y are both inclusive indices.
 
-	void add_substring(int substring_start, int substring_length);
-	bool intersects(const Vector2i &other_interval) const;
+	void add_substring(int p_substring_start, int p_substring_length);
+	bool intersects(const Vector2i &p_other_interval) const;
 	bool is_case_insensitive(const String &p_original, const String &p_adjusted) const;
-	int get_miss_count() const { return token_length - matched_length; };
+	int get_miss_count() const { return token_length - matched_length; }
 
 public:
 	int score = 0;
-	Vector<Vector2i> substrings; // x is start index, y is length
+	Vector<Vector2i> substrings; // x is start index, y is length.
 };
 
 class FuzzySearchResult {

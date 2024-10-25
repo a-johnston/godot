@@ -90,10 +90,10 @@ double calculate_std_dev(const Vector<double> &p_numbers) {
 	return std::sqrt(variance);
 }
 
-auto load_test_data(int p_repeat = 1) {
-	// This file has 1k entries so p_repeat can be used to benchmark in multiples of 1k
+Vector<String> load_test_data(int p_repeat = 1) {
+	// This file has 1k entries so p_repeat can be used to benchmark in multiples of 1k.
 	Ref<FileAccess> fp = FileAccess::open(TestUtils::get_data_path("fuzzy_search/project_dir_tree.txt"), FileAccess::READ);
-	REQUIRE(!fp.is_null());
+	REQUIRE(fp.is_valid());
 	auto lines = fp->get_as_utf8_string().split("\n");
 	Vector<String> all_lines;
 	while (p_repeat-- > 0) {

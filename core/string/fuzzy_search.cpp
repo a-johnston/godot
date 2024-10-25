@@ -34,7 +34,7 @@ constexpr float cull_factor = 0.1f;
 constexpr float cull_cutoff = 30.0f;
 const String boundary_chars = "/\\-_.";
 
-bool is_valid_interval(const Vector2i &p_interval) {
+static bool _is_valid_interval(const Vector2i &p_interval) {
 	// Empty intervals are represented as (-1, -1).
 	return p_interval.x >= 0 && p_interval.y >= p_interval.x;
 }
@@ -49,7 +49,7 @@ Vector2i extend_interval(const Vector2i &p_a, const Vector2i &p_b) {
 	return Vector2i(MIN(p_a.x, p_b.x), MAX(p_a.y, p_b.y));
 }
 
-bool is_word_boundary(const String &str, int index) {
+static bool _is_word_boundary(const String &p_str, int p_index) {
 	if (index == -1 || index == str.size()) {
 		return true;
 	}
@@ -103,18 +103,18 @@ bool FuzzySearchToken::try_fuzzy_match(FuzzyTokenMatch &p_match, const String &p
 	return true;
 }
 
-void FuzzyTokenMatch::add_substring(int substring_start, int substring_length) {
-	substrings.append(Vector2i(substring_start, substring_length));
-	matched_length += substring_length;
-	Vector2i substring_interval = { substring_start, substring_start + substring_length - 1 };
+void FuzzyTokenMatch::add_substring(int p_substring_start, int p_substring_length) {
+	substrings.append(Vector2i(p_substring_start, p_substring_length));
+	matched_length += p_substring_length;
+	Vector2i substring_interval = { p_substring_start, p_substring_start + p_substring_length - 1 };
 	interval = extend_interval(interval, substring_interval);
 }
 
-bool FuzzyTokenMatch::intersects(const Vector2i &other_interval) const {
-	if (!is_valid_interval(interval) || !is_valid_interval(other_interval)) {
+bool FuzzyTokenMatch::intersects(const Vector2i &p_other_interval) const {
+	if (!is_valid_interval(interval) || !is_valid_interval(p_other_interval)) {
 		return false;
 	}
-	return interval.y >= other_interval.x && interval.x <= other_interval.y;
+	return interval.y >= p_other_interval.x && interval.x <= p_other_interval.y;
 }
 
 bool FuzzySearchResult::can_add_token_match(const FuzzyTokenMatch &p_match) const {
@@ -155,7 +155,7 @@ void FuzzySearchResult::score_token_match(FuzzyTokenMatch &p_match, bool p_case_
 	p_match.score = -20 * p_match.get_miss_count() - (p_case_insensitive ? 3 : 0);
 
 	for (const Vector2i &substring : p_match.substrings) {
-		// Score longer substrings higher than short substrings
+		// Score longer substrings higher than short substrings.
 		int substring_score = substring.y * substring.y;
 		// Score matches deeper in path higher than shallower matches
 		if (substring.x > dir_index) {
@@ -242,15 +242,15 @@ void FuzzySearch::sort_and_filter(Vector<FuzzySearchResult> &p_results) const {
 	remove_low_scores(p_results, cull_score);
 
 	struct FuzzySearchResultComparator {
-		bool operator()(const FuzzySearchResult &A, const FuzzySearchResult &B) const {
-			// Sort on (score, length, alphanumeric) to ensure consistent ordering
-			if (A.score == B.score) {
-				if (A.target.length() == B.target.length()) {
-					return A.target < B.target;
+		bool operator()(const FuzzySearchResult &p_lhs, const FuzzySearchResult &p_rhs) const {
+			// Sort on (score, length, alphanumeric) to ensure consistent ordering.
+			if (p_lhs.score == p_rhs.score) {
+				if (p_lhs.target.length() == p_rhs.target.length()) {
+					return p_lhs.target < p_rhs.target;
 				}
-				return A.target.length() < B.target.length();
+				return p_lhs.target.length() < p_rhs.target.length();
 			}
-			return A.score > B.score;
+			return p_lhs.score > p_rhs.score;
 		}
 	};
 
@@ -281,7 +281,7 @@ void FuzzySearch::set_query(const String &p_query) {
 		}
 	};
 
-	// Prioritize matching longer tokens before shorter ones since match overlaps are not accepted
+	// Prioritize matching longer tokens before shorter ones since match overlaps are not accepted.
 	tokens.sort_custom<TokenComparator>();
 }
 

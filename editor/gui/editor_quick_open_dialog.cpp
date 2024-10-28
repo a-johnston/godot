@@ -31,6 +31,7 @@
 #include "editor_quick_open_dialog.h"
 
 #include "core/string/fuzzy_search.h"
+#include "core/string/string_builder.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_node.h"
 #include "editor/editor_resource_preview.h"
@@ -42,52 +43,11 @@
 #include "scene/gui/flow_container.h"
 #include "scene/gui/margin_container.h"
 #include "scene/gui/panel_container.h"
+#include "scene/gui/rich_text_label.h"
 #include "scene/gui/separator.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/gui/tree.h"
-
-Rect2i HighlightedLabel::get_substr_rect(const Vector2i &p_substr) {
-	Ref<Font> font = get_theme_font(SceneStringName(font));
-	int font_size = get_theme_font_size(SceneStringName(font_size));
-	Vector2i prefix = font->get_string_size(get_text().substr(0, p_substr.x), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size);
-	prefix.y = 0;
-	Vector2i size = font->get_string_size(get_text().substr(p_substr.x, p_substr.y), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size);
-	return { prefix, size };
-}
-
-void HighlightedLabel::add_highlight(const Vector2i &p_interval) {
-	if (p_interval.y > 0) {
-		highlights.append(get_substr_rect(p_interval));
-		queue_redraw();
-	}
-}
-
-void HighlightedLabel::reset_highlights() {
-	highlights.clear();
-	queue_redraw();
-}
-
-void HighlightedLabel::_notification(int p_notification) {
-	if (p_notification == NOTIFICATION_DRAW) {
-		if (highlights.is_empty()) {
-			return;
-		}
-
-		Vector2i offset = get_character_bounds(0).position;
-		int max_width = get_size().x - 5 * EDSCALE;
-
-		// NB: The highlight rect is computed exclusively based on the assigned text, but layout related values
-		// are only added in here each time the label is drawn.
-		for (Rect2i rect : highlights) {
-			rect.position += offset;
-			rect.size.x = MIN(rect.size.x, max_width - rect.position.x);
-			if (rect.size.x > 0) {
-				draw_rect(rect, Color(1, 1, 1, 0.07), true);
-				draw_rect(rect, Color(0.5, 0.7, 1.0, 0.4), false, 1);
-			}
-		}
-	}
-}
+#include "scene/resources/style_box_flat.h"
 
 EditorQuickOpenDialog::EditorQuickOpenDialog() {
 	VBoxContainer *vbc = memnew(VBoxContainer);
@@ -836,6 +796,46 @@ static Vector2i _get_name_interval(const Vector2i &p_interval, int p_dir_index) 
 	return { start - first_name_idx, p_interval.y - start + p_interval.x };
 }
 
+static String _get_highlighted_text(
+		const FuzzySearchResult *p_result,
+		const String &p_str,
+		Vector2i (*p_get_interval)(const Vector2i &, int)) {
+	int dir_idx = p_result->dir_index;
+
+	Vector<Vector2i> intervals;
+
+	for (const FuzzyTokenMatch &match : p_result->token_matches) {
+		for (const Vector2i &full_interval : match.substrings) {
+			Vector2i interval = p_get_interval(full_interval, dir_idx);
+			if (interval.x != -1) {
+				intervals.append(interval);
+			}
+		}
+	}
+
+	StringBuilder sb;
+	String color = "[color=#0099ff]";
+	String end_color = "[/color]";
+	intervals.sort();
+	int idx = 0;
+
+	for (const Vector2i &interval : intervals) {
+		if (interval.x > idx) {
+			sb += p_str.substr(idx, interval.x - idx);
+		}
+		sb += color;
+		sb += p_str.substr(interval.x, interval.y);
+		sb += end_color;
+		idx = interval.x + interval.y;
+	}
+
+	if (idx < p_str.length()) {
+		sb += p_str.substr(idx);
+	}
+
+	return sb.as_string();
+}
+
 QuickOpenResultListItem::QuickOpenResultListItem() {
 	set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	add_theme_constant_override("separation", 4 * EDSCALE);
@@ -863,34 +863,53 @@ QuickOpenResultListItem::QuickOpenResultListItem() {
 		text_container->set_v_size_flags(Control::SIZE_FILL);
 		add_child(text_container);
 
-		name = memnew(HighlightedLabel);
+		name = memnew(RichTextLabel);
+		name->set_use_bbcode(true);
+		name->set_custom_minimum_size(Size2(0, 25 * EDSCALE));
+		name->set_scroll_active(false);
 		name->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		name->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 		name->set_horizontal_alignment(HorizontalAlignment::HORIZONTAL_ALIGNMENT_LEFT);
 		text_container->add_child(name);
 
-		path = memnew(HighlightedLabel);
+		path = memnew(RichTextLabel);
+		path->set_use_bbcode(true);
+		path->set_custom_minimum_size(Size2(0, 25 * EDSCALE));
+		path->set_scroll_active(false);
 		path->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		path->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 		path->add_theme_font_size_override(SceneStringName(font_size), 12 * EDSCALE);
 		text_container->add_child(path);
 	}
+}
+
+static void _copy_stylebox_layout(const Ref<StyleBox> p_a, const Ref<StyleBox> p_b) {
+	p_b->set_content_margin_individual(
+			p_a->get_content_margin(SIDE_LEFT),
+			p_a->get_content_margin(SIDE_TOP),
+			p_a->get_content_margin(SIDE_RIGHT),
+			p_a->get_content_margin(SIDE_BOTTOM));
+}
+
+void QuickOpenResultListItem::maybe_update_stylebox() {
+	if (name->has_theme_stylebox_override("normal")) {
+		return;
+	}
+
+	Ref<StyleBox> active = name->get_theme_stylebox("normal");
+	Ref<StyleBoxFlat> stylebox;
+	stylebox.instantiate();
+	stylebox->set_bg_color(Color(0, 0, 0, 0));
+	_copy_stylebox_layout(active, stylebox);
+	name->add_theme_style_override("normal", stylebox);
+	path->add_theme_style_override("normal", stylebox);
 }
 
 void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight) {
 	thumbnail->set_texture(p_candidate.thumbnail);
 	name->set_text(p_candidate.file_path.get_file());
 	path->set_text(p_candidate.file_path.get_base_dir());
-	name->reset_highlights();
-	path->reset_highlights();
-
 	if (p_highlight && p_candidate.result != nullptr) {
-		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
-			for (const Vector2i &interval : match.substrings) {
-				path->add_highlight(_get_path_interval(interval, p_candidate.result->dir_index));
-				name->add_highlight(_get_name_interval(interval, p_candidate.result->dir_index));
-			}
-		}
+		name->set_text(_get_highlighted_text(p_candidate.result, name->get_text(), _get_name_interval));
+		path->set_text(_get_highlighted_text(p_candidate.result, path->get_text(), _get_path_interval));
 	}
 
 	const int max_size = 32 * EDSCALE;
@@ -907,14 +926,14 @@ void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_cand
 		image_container->add_theme_constant_override("margin_left", CONTAINER_MARGIN);
 		image_container->add_theme_constant_override("margin_right", 0);
 	}
+
+	maybe_update_stylebox();
 }
 
 void QuickOpenResultListItem::reset() {
 	thumbnail->set_texture(nullptr);
 	name->set_text("");
 	path->set_text("");
-	name->reset_highlights();
-	path->reset_highlights();
 }
 
 void QuickOpenResultListItem::highlight_item(const Color &p_color) {
@@ -946,26 +965,36 @@ QuickOpenResultGridItem::QuickOpenResultGridItem() {
 	thumbnail->set_custom_minimum_size(Size2i(120 * EDSCALE, 64 * EDSCALE));
 	add_child(thumbnail);
 
-	name = memnew(HighlightedLabel);
+	name = memnew(RichTextLabel);
+	name->set_use_bbcode(true);
+	name->set_custom_minimum_size(Size2(0, 25 * EDSCALE));
+	name->set_scroll_active(false);
 	name->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	name->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 	name->set_horizontal_alignment(HorizontalAlignment::HORIZONTAL_ALIGNMENT_CENTER);
 	name->add_theme_font_size_override(SceneStringName(font_size), 13 * EDSCALE);
 	add_child(name);
+}
+
+void QuickOpenResultGridItem::maybe_update_stylebox() {
+	if (name->has_theme_stylebox_override("normal")) {
+		return;
+	}
+
+	Ref<StyleBox> active = name->get_theme_stylebox("normal");
+	Ref<StyleBoxFlat> stylebox;
+	stylebox.instantiate();
+	stylebox->set_bg_color(Color(0, 0, 0, 0));
+	_copy_stylebox_layout(active, stylebox);
+	name->add_theme_style_override("normal", stylebox);
 }
 
 void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight) {
 	thumbnail->set_texture(p_candidate.thumbnail);
 	name->set_text(p_candidate.file_path.get_file());
 	name->set_tooltip_text(p_candidate.file_path);
-	name->reset_highlights();
 
 	if (p_highlight && p_candidate.result != nullptr) {
-		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
-			for (const Vector2i &interval : match.substrings) {
-				name->add_highlight(_get_name_interval(interval, p_candidate.result->dir_index));
-			}
-		}
+		name->set_text(_get_highlighted_text(p_candidate.result, name->get_text(), _get_name_interval));
 	}
 
 	bool uses_icon = p_candidate.thumbnail->get_width() < (32 * EDSCALE);
@@ -977,12 +1006,13 @@ void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_cand
 		thumbnail->set_expand_mode(TextureRect::EXPAND_FIT_WIDTH_PROPORTIONAL);
 		thumbnail->set_stretch_mode(TextureRect::StretchMode::STRETCH_SCALE);
 	}
+
+	maybe_update_stylebox();
 }
 
 void QuickOpenResultGridItem::reset() {
 	thumbnail->set_texture(nullptr);
 	name->set_text("");
-	name->reset_highlights();
 }
 
 void QuickOpenResultGridItem::highlight_item(const Color &p_color) {

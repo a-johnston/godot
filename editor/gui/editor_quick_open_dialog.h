@@ -49,7 +49,7 @@ class TextureRect;
 class VBoxContainer;
 
 class FuzzySearchResult;
-
+class RichTextLabel;
 class QuickOpenResultItem;
 
 enum class QuickOpenDisplayMode {
@@ -61,20 +61,6 @@ struct QuickOpenResultCandidate {
 	String file_path;
 	Ref<Texture2D> thumbnail;
 	const FuzzySearchResult *result = nullptr;
-};
-
-class HighlightedLabel : public Label {
-	GDCLASS(HighlightedLabel, Label)
-
-	Vector<Rect2i> highlights;
-
-public:
-	Rect2i get_substr_rect(const Vector2i &p_interval);
-	void add_highlight(const Vector2i &p_interval);
-	void reset_highlights();
-
-protected:
-	void _notification(int p_notification);
 };
 
 class QuickOpenResultContainer : public VBoxContainer {
@@ -170,13 +156,14 @@ public:
 	QuickOpenResultGridItem();
 
 	void reset();
+	void maybe_update_stylebox();
 	void set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight);
 	void highlight_item(const Color &p_color);
 	void remove_highlight();
 
 private:
 	TextureRect *thumbnail = nullptr;
-	HighlightedLabel *name = nullptr;
+	RichTextLabel *name = nullptr;
 };
 
 class QuickOpenResultListItem : public HBoxContainer {
@@ -186,6 +173,7 @@ public:
 	QuickOpenResultListItem();
 
 	void reset();
+	void maybe_update_stylebox();
 	void set_content(const QuickOpenResultCandidate &p_candidate, bool p_highlight);
 	void highlight_item(const Color &p_color);
 	void remove_highlight();
@@ -200,8 +188,8 @@ private:
 	VBoxContainer *text_container = nullptr;
 
 	TextureRect *thumbnail = nullptr;
-	HighlightedLabel *name = nullptr;
-	HighlightedLabel *path = nullptr;
+	RichTextLabel *name = nullptr;
+	RichTextLabel *path = nullptr;
 };
 
 class QuickOpenResultItem : public HBoxContainer {

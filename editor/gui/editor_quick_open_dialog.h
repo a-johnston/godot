@@ -230,7 +230,6 @@ private:
 
 	bool is_hovering = false;
 	bool is_selected = false;
-	bool dirty_highlights = false;
 
 	void _set_enabled(bool p_enabled);
 };

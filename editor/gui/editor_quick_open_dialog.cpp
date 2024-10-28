@@ -56,7 +56,7 @@ Rect2i HighlightedLabel::get_substr_rect(const Vector2i &p_substr) {
 }
 
 void HighlightedLabel::add_highlight(const Vector2i &p_interval) {
-	if (p_interval.x != -1) {
+	if (p_interval.y > 0) {
 		highlights.append(get_substr_rect(p_interval));
 		queue_redraw();
 	}
@@ -406,7 +406,7 @@ void QuickOpenResultContainer::_use_default_candidates() {
 
 void QuickOpenResultContainer::_update_fuzzy_search_results() {
 	FuzzySearch fuzzy_search;
-	fuzzy_search.start_offset = 6; // Don't match against "res://"
+	fuzzy_search.start_offset = 6; // Don't match against "res://" at the start of each filepath.
 	fuzzy_search.set_query(query);
 	fuzzy_search.max_results = max_total_results;
 	bool fuzzy_matching = EDITOR_GET("filesystem/quick_open_dialog/enable_fuzzy_matching");
@@ -476,6 +476,7 @@ void QuickOpenResultContainer::handle_search_box_input(const Ref<InputEvent> &p_
 			case Key::LEFT:
 			case Key::RIGHT: {
 				if (content_display_mode == QuickOpenDisplayMode::GRID) {
+					// Maybe strip off the shift modifier to allow non-selecting navigation by character?
 					if (key_event->get_modifiers_mask() == 0) {
 						move_selection = true;
 					}
@@ -746,7 +747,6 @@ void QuickOpenResultItem::set_display_mode(QuickOpenDisplayMode p_display_mode) 
 		grid_item->show();
 	}
 
-	dirty_highlights = true;
 	queue_redraw();
 }
 
@@ -764,7 +764,6 @@ void QuickOpenResultItem::set_content(const QuickOpenResultCandidate &p_candidat
 
 void QuickOpenResultItem::reset() {
 	_set_enabled(false);
-
 	is_hovering = false;
 	is_selected = false;
 	list_item->reset();
@@ -885,11 +884,11 @@ void QuickOpenResultListItem::set_content(const QuickOpenResultCandidate &p_cand
 	name->reset_highlights();
 	path->reset_highlights();
 
-	if (p_highlight) {
+	if (p_highlight && p_candidate.result != nullptr) {
 		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
 			for (const Vector2i &interval : match.substrings) {
-				path->add_highlight(get_path_interval(interval, p_candidate.result->dir_index));
-				name->add_highlight(get_name_interval(interval, p_candidate.result->dir_index));
+				path->add_highlight(_get_path_interval(interval, p_candidate.result->dir_index));
+				name->add_highlight(_get_name_interval(interval, p_candidate.result->dir_index));
 			}
 		}
 	}
@@ -961,10 +960,10 @@ void QuickOpenResultGridItem::set_content(const QuickOpenResultCandidate &p_cand
 	name->set_tooltip_text(p_candidate.file_path);
 	name->reset_highlights();
 
-	if (p_highlight) {
+	if (p_highlight && p_candidate.result != nullptr) {
 		for (const FuzzyTokenMatch &match : p_candidate.result->token_matches) {
 			for (const Vector2i &interval : match.substrings) {
-				name->add_highlight(get_name_interval(interval, p_candidate.result->dir_index));
+				name->add_highlight(_get_name_interval(interval, p_candidate.result->dir_index));
 			}
 		}
 	}

@@ -33,25 +33,12 @@
 
 #include "core/string/fuzzy_search.h"
 #include "tests/test_macros.h"
-#include <chrono>
-#include <iostream>
 
 namespace TestFuzzySearch {
 
 struct FuzzySearchTestCase {
 	String query;
 	String expected;
-};
-
-struct FuzzySearchTestOutcome {
-	String top_result;
-	int result_count;
-};
-
-struct FuzzySearchBenchmarkResult {
-	double average_ms;
-	double std_dev_ms;
-	FuzzySearchTestOutcome outcome;
 };
 
 // Ideally each of these test queries should represent a different aspect, and potentially bottleneck, of the search process.
@@ -72,83 +59,22 @@ const FuzzySearchTestCase test_cases[] = {
 	{ "entity gd", "./entity/entity_man.gd" }
 };
 
-double calculate_mean(const Vector<double> &p_numbers) {
-	double sum = 0.0;
-	for (double num : p_numbers) {
-		sum += num;
-	}
-	return sum / static_cast<double>(p_numbers.size());
-}
-
-double calculate_std_dev(const Vector<double> &p_numbers) {
-	double mean = calculate_mean(p_numbers);
-	double variance = 0.0;
-	for (double num : p_numbers) {
-		variance += (num - mean) * (num - mean);
-	}
-	variance /= static_cast<double>(p_numbers.size());
-	return std::sqrt(variance);
-}
-
-Vector<String> load_test_data(int p_repeat = 1) {
-	// This file has 1k entries so p_repeat can be used to benchmark in multiples of 1k.
+Vector<String> load_test_data() {
 	Ref<FileAccess> fp = FileAccess::open(TestUtils::get_data_path("fuzzy_search/project_dir_tree.txt"), FileAccess::READ);
 	REQUIRE(fp.is_valid());
-	auto lines = fp->get_as_utf8_string().split("\n");
-	Vector<String> all_lines;
-	while (p_repeat-- > 0) {
-		all_lines.append_array(lines);
-	}
-	CHECK(lines.size() > 0);
-	return all_lines;
+	return fp->get_as_utf8_string().split("\n");
 }
-
-FuzzySearchTestOutcome get_top_result_and_count(String &p_query, Vector<String> &p_lines, int p_max_results = 100) {
-	FuzzySearch search;
-	search.set_query(p_query);
-	search.max_results = p_max_results;
-	Vector<FuzzySearchResult> results;
-	search.search_all(p_lines, results);
-	return { results.size() > 0 ? results[0].target : "<no result>", (int)results.size() };
-}
-
-FuzzySearchBenchmarkResult bench(String p_query, Vector<String> p_targets) {
-	Vector<double> timings;
-	FuzzySearchTestOutcome result;
-
-	// run twice for a warmp up
-	for (int i = 0; i < 2; i++) {
-		timings.clear();
-
-		for (int j = 0; j < 10; j++) {
-			auto start = std::chrono::high_resolution_clock::now();
-			result = get_top_result_and_count(p_query, p_targets);
-			auto end = std::chrono::high_resolution_clock::now();
-			auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-			timings.push_back(duration / 1000.0f); // Convert to fractional ms
-		}
-	}
-
-	return { calculate_mean(timings), calculate_std_dev(timings), result };
-}
-
-/*
-TEST_CASE("[Stress][FuzzySearch] Benchmark fuzzy search") {
-	auto targets = load_test_data(20);
-	print_line(vformat("Benchmarking fuzzy search against %dk targets", targets.size() / 1000));
-	print_line("Query\tMean (ms)\tStd Dev (ms)\tMatches");
-	int i = 1;
-	for (auto test_case : test_cases) {
-		auto result = bench(test_case.query, targets);
-		print_line(vformat("%d\t%4.2f\t\t%4.2f\t\t%d", i++, result.average_ms, result.std_dev_ms, result.outcome.result_count));
-	}
-}
-*/
 
 TEST_CASE("[FuzzySearch] Test fuzzy search results") {
-	auto targets = load_test_data();
-	for (auto test_case : test_cases) {
-		CHECK_EQ(get_top_result_and_count(test_case.query, targets).top_result, test_case.expected);
+	FuzzySearch search;
+	Vector<FuzzySearchResult> results;
+	Vector<String> targets = load_test_data();
+
+	for (FuzzySearchTestCase test_case : test_cases) {
+		search.set_query(test_case.query);
+		search.search_all(targets, results);
+		CHECK_GT(results.size(), 0);
+		CHECK_EQ(results[0].target, test_case.expected);
 	}
 }
 

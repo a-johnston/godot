@@ -2210,7 +2210,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 	// Start with RenderingDevice-based backends.
 #ifdef RD_ENABLED
-	renderer_hints = "forward_plus,mobile";
+	renderer_hints = "forward_plus,mobile,raytracing";
 	default_renderer_mobile = "mobile";
 #endif
 
@@ -2237,6 +2237,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	if (!rendering_method.is_empty()) {
 		if (rendering_method != "forward_plus" &&
 				rendering_method != "mobile" &&
+				rendering_method != "raytracing" &&
 				rendering_method != "gl_compatibility") {
 			OS::get_singleton()->print("Unknown rendering method '%s', aborting.\nValid options are ",
 					rendering_method.utf8().get_data());
@@ -2315,7 +2316,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		// Now validate whether the selected driver matches with the renderer.
 		bool valid_combination = false;
 		Vector<String> available_drivers;
-		if (rendering_method == "forward_plus" || rendering_method == "mobile") {
+		if (rendering_method == "forward_plus" || rendering_method == "mobile" || rendering_method == "raytracing") {
 #ifdef VULKAN_ENABLED
 			available_drivers.push_back("vulkan");
 #endif

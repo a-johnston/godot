@@ -34,7 +34,13 @@ namespace Godot.SourceGenerators
         public GodotMethodData InvokeMethodData { get; }
     }
 
-    public readonly struct GodotPropertyData
+    public interface IHasMarshalType
+    {
+        public ISymbol Symbol { get; }
+        public MarshalType Type { get; }
+    }
+
+    public readonly struct GodotPropertyData : IHasMarshalType
     {
         public GodotPropertyData(IPropertySymbol propertySymbol, MarshalType type)
         {
@@ -42,11 +48,12 @@ namespace Godot.SourceGenerators
             Type = type;
         }
 
+        public ISymbol Symbol => PropertySymbol;
         public IPropertySymbol PropertySymbol { get; }
         public MarshalType Type { get; }
     }
 
-    public readonly struct GodotFieldData
+    public readonly struct GodotFieldData : IHasMarshalType
     {
         public GodotFieldData(IFieldSymbol fieldSymbol, MarshalType type)
         {
@@ -54,29 +61,8 @@ namespace Godot.SourceGenerators
             Type = type;
         }
 
+        public ISymbol Symbol => FieldSymbol;
         public IFieldSymbol FieldSymbol { get; }
-        public MarshalType Type { get; }
-    }
-
-    public struct GodotPropertyOrFieldData
-    {
-        public GodotPropertyOrFieldData(ISymbol symbol, MarshalType type)
-        {
-            Symbol = symbol;
-            Type = type;
-        }
-
-        public GodotPropertyOrFieldData(GodotPropertyData propertyData)
-            : this(propertyData.PropertySymbol, propertyData.Type)
-        {
-        }
-
-        public GodotPropertyOrFieldData(GodotFieldData fieldData)
-            : this(fieldData.FieldSymbol, fieldData.Type)
-        {
-        }
-
-        public ISymbol Symbol { get; }
         public MarshalType Type { get; }
     }
 }

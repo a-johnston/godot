@@ -125,9 +125,11 @@ namespace Godot.SourceGenerators
             // Ignore properties without a getter, without a setter or with an init-only setter. Godot properties must be both readable and writable.
             var godotClassProperties = propertySymbols.Where(property => !(property.IsReadOnly || property.IsWriteOnly || property.SetMethod!.IsInitOnly))
                 .WhereIsGodotCompatibleType(typeCache)
+                .OfType<GodotPropertyData>()
                 .ToArray();
             var godotClassFields = fieldSymbols.Where(property => !property.IsReadOnly)
                 .WhereIsGodotCompatibleType(typeCache)
+                .OfType<GodotFieldData>()
                 .ToArray();
 
             var signalDelegateSymbols = members

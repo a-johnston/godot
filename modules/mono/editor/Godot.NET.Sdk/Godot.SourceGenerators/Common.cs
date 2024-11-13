@@ -110,7 +110,7 @@ namespace Godot.SourceGenerators
         public static readonly DiagnosticDescriptor OnlyToolClassesShouldUseExportToolButtonRule =
             new DiagnosticDescriptor(id: "GD0108",
                 title: "The exported tool button is not in a tool class",
-                messageFormat: "The exported tool button '{0}' is not in a tool class",
+                messageFormat: "The [ExportToolButton] attribute can only be used in classes marked with the [Tool] attribute",
                 category: "Usage",
                 DiagnosticSeverity.Error,
                 isEnabledByDefault: true,
@@ -119,8 +119,8 @@ namespace Godot.SourceGenerators
 
         public static readonly DiagnosticDescriptor ExportToolButtonShouldNotBeUsedWithExportRule =
             new DiagnosticDescriptor(id: "GD0109",
-                title: "The [ExportToolButton] attribute cannot be used with another [Export] attribute",
-                messageFormat: "The [ExportToolButton] attribute cannot be used with another [Export] attribute on '{0}'",
+                title: "The [ExportToolButton] attribute cannot be used with the [Export] attribute",
+                messageFormat: "'{0}' cannot have both an [ExportToolButton] attribute and an [Export] attribute",
                 category: "Usage",
                 DiagnosticSeverity.Error,
                 isEnabledByDefault: true,
@@ -130,7 +130,7 @@ namespace Godot.SourceGenerators
         public static readonly DiagnosticDescriptor ExportToolButtonIsNotCallableRule =
             new DiagnosticDescriptor(id: "GD0110",
                 title: "The exported tool button is not a Callable",
-                messageFormat: "The exported tool button '{0}' is not a Callable",
+                messageFormat: "'{0}' must be of type Callable to use [ExportToolButton]",
                 category: "Usage",
                 DiagnosticSeverity.Error,
                 isEnabledByDefault: true,

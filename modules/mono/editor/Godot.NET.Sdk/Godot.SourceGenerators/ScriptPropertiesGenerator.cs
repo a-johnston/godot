@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -122,8 +123,25 @@ namespace Godot.SourceGenerators
                 .Where(s => !s.IsStatic && s.Kind == SymbolKind.Field && !s.IsImplicitlyDeclared)
                 .Cast<IFieldSymbol>();
 
-            var godotClassProperties = propertySymbols.WhereIsGodotCompatibleType(typeCache).ToArray();
-            var godotClassFields = fieldSymbols.WhereIsGodotCompatibleType(typeCache).ToArray();
+            var symbols = propertySymbols.OfType<ISymbol>().Concat(fieldSymbols).ToArray();
+            var godotSymbols = symbols.WhereIsGodotCompatibleType(typeCache)
+                .OrderBy(data => data.Symbol.Locations[0].Path())
+                .ThenBy(data => data.Symbol.Locations[0].StartLine())
+                .ToArray();
+            var godotClassFields = godotSymbols.OfType<GodotFieldData>().ToArray();
+            var godotClassProperties = godotSymbols.OfType<GodotPropertyData>().ToArray();
+
+            foreach (var member in symbols.WhereIsNotGodotCompatibleType(typeCache))
+            {
+                if (member.GetExportToolButtonAttribute() is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Common.ExportToolButtonIsNotCallableRule,
+                        member.Locations.FirstLocationWithSourceTreeOrDefault(),
+                        member.ToDisplayString()
+                    ));
+                }
+            }
 
             source.Append("#pragma warning disable CS0109 // Disable warning about redundant 'new' keyword\n");
 
@@ -172,7 +190,7 @@ namespace Godot.SourceGenerators
 
             source.Append("    }\n"); // class GodotInternal
 
-            if (godotClassProperties.Length > 0 || godotClassFields.Length > 0)
+            if (godotSymbols.Length > 0)
             {
 
                 // Generate SetGodotClassPropertyValue
@@ -259,21 +277,12 @@ namespace Godot.SourceGenerators
                     .Append(DictionaryType)
                     .Append("();\n");
 
-                // To retain the definition order (and display categories correctly), we want to
-                //  iterate over fields and properties at the same time, sorted by line number.
-                var godotClassPropertiesAndFields = Enumerable.Empty<GodotPropertyOrFieldData>()
-                    .Concat(godotClassProperties.Select(propertyData => new GodotPropertyOrFieldData(propertyData)))
-                    .Concat(godotClassFields.Select(fieldData => new GodotPropertyOrFieldData(fieldData)))
-                    .OrderBy(data => data.Symbol.Locations[0].Path())
-                    .ThenBy(data => data.Symbol.Locations[0].StartLine());
-
-                foreach (var member in godotClassPropertiesAndFields)
+                foreach (var member in godotSymbols)
                 {
                     foreach (var groupingInfo in DetermineGroupingPropertyInfo(member.Symbol))
                         AppendGroupingPropertyInfo(source, groupingInfo);
 
-                    var propertyInfo = DeterminePropertyInfo(context, typeCache,
-                        member.Symbol, member.Type);
+                    var propertyInfo = DeterminePropertyInfo(context, typeCache, member.Symbol, member.Type);
 
                     if (propertyInfo == null)
                         continue;
@@ -426,11 +435,8 @@ namespace Godot.SourceGenerators
             MarshalType marshalType
         )
         {
-            var exportAttr = memberSymbol.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.IsGodotExportAttribute() ?? false);
-
-            var exportToolButtonAttr = memberSymbol.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.IsGodotExportToolButtonAttribute() ?? false);
+            var exportAttr = memberSymbol.GetExportAttribute();
+            var exportToolButtonAttr = memberSymbol.GetExportToolButtonAttribute();
 
             if (exportAttr != null && exportToolButtonAttr != null)
             {
@@ -447,25 +453,10 @@ namespace Godot.SourceGenerators
 
             if (exportAttr != null && propertySymbol != null)
             {
-                if (propertySymbol.GetMethod == null)
+                // Exports can be neither read-only nor write-only but the diagnostic errors are already
+                // marked by ScriptPropertyDefValGenerator.cs so just quit early here.
+                if (propertySymbol.GetMethod == null || propertySymbol.SetMethod == null || propertySymbol.SetMethod.IsInitOnly)
                 {
-                    // This should never happen, as we filtered WriteOnly properties, but just in case.
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        Common.ExportedPropertyIsWriteOnlyRule,
-                        propertySymbol.Locations.FirstLocationWithSourceTreeOrDefault(),
-                        propertySymbol.ToDisplayString()
-                    ));
-                    return null;
-                }
-
-                if (propertySymbol.SetMethod == null || propertySymbol.SetMethod.IsInitOnly)
-                {
-                    // This should never happen, as we filtered ReadOnly properties, but just in case.
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        Common.ExportedMemberIsReadOnlyRule,
-                        propertySymbol.Locations.FirstLocationWithSourceTreeOrDefault(),
-                        propertySymbol.ToDisplayString()
-                    ));
                     return null;
                 }
             }

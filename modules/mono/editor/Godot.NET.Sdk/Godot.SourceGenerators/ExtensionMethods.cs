@@ -345,36 +345,54 @@ namespace Godot.SourceGenerators
             }
         }
 
-        public static IEnumerable<GodotPropertyData> WhereIsGodotCompatibleType(
-            this IEnumerable<IPropertySymbol> properties,
+        public static AttributeData? GetExportAttribute(this ISymbol symbol)
+            => symbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.IsGodotExportAttribute() ?? false);
+
+        public static AttributeData? GetExportToolButtonAttribute(this ISymbol symbol)
+            => symbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.IsGodotExportToolButtonAttribute() ?? false);
+
+        public static MarshalType? GetMarshalType(this ISymbol symbol, MarshalUtils.TypeCache typeCache) =>
+            symbol switch
+            {
+                IPropertySymbol property => property.GetMarshalType(typeCache),
+                IFieldSymbol field => field.GetMarshalType(typeCache),
+                _ => null
+            };
+
+        public static MarshalType? GetMarshalType(this IPropertySymbol property, MarshalUtils.TypeCache typeCache)
+            => MarshalUtils.ConvertManagedTypeToMarshalType(property.Type, typeCache);
+
+        public static MarshalType? GetMarshalType(this IFieldSymbol field, MarshalUtils.TypeCache typeCache)
+            => MarshalUtils.ConvertManagedTypeToMarshalType(field.Type, typeCache);
+
+        public static IEnumerable<ISymbol> WhereIsNotGodotCompatibleType(
+            this IEnumerable<ISymbol> symbols,
+            MarshalUtils.TypeCache typeCache
+        ) => symbols.Where(symbol => symbol.GetMarshalType(typeCache) is null);
+
+        public static IEnumerable<IHasMarshalType> WhereIsGodotCompatibleType(
+            this IEnumerable<ISymbol> symbols,
             MarshalUtils.TypeCache typeCache
         )
         {
-            foreach (var property in properties)
+            foreach (var symbol in symbols)
             {
-                var marshalType = MarshalUtils.ConvertManagedTypeToMarshalType(property.Type, typeCache);
-
-                if (marshalType == null)
-                    continue;
-
-                yield return new GodotPropertyData(property, marshalType.Value);
-            }
-        }
-
-        public static IEnumerable<GodotFieldData> WhereIsGodotCompatibleType(
-            this IEnumerable<IFieldSymbol> fields,
-            MarshalUtils.TypeCache typeCache
-        )
-        {
-            foreach (var field in fields)
-            {
-                // TODO: We should still restore read-only fields after reloading assembly. Two possible ways: reflection or turn RestoreGodotObjectData into a constructor overload.
-                var marshalType = MarshalUtils.ConvertManagedTypeToMarshalType(field.Type, typeCache);
-
-                if (marshalType == null)
-                    continue;
-
-                yield return new GodotFieldData(field, marshalType.Value);
+                var nullableType = symbol.GetMarshalType(typeCache);
+                if (nullableType is MarshalType type)
+                {
+                    IHasMarshalType? godotSymbol = symbol switch
+                    {
+                        IPropertySymbol property => new GodotPropertyData(property, type),
+                        // TODO: We should still restore read-only fields after reloading assembly. Two
+                        // possible ways: reflection or turn RestoreGodotObjectData into a constructor overload.
+                        IFieldSymbol field => new GodotFieldData(field, type),
+                        _ => null
+                    };
+                    if (godotSymbol is not null)
+                    {
+                        yield return godotSymbol;
+                    }
+                }
             }
         }
 

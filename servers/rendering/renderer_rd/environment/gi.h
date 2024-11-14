@@ -270,6 +270,8 @@ private:
 
 	/* HDDAGI */
 
+	RID hddagi_null_img;
+
 	struct HDDAGIShader {
 		enum HDDAGIPreprocessShaderVersion {
 			PRE_PROCESS_REGION_STORE,
@@ -610,7 +612,7 @@ public:
 			RID light_process_dispatch_buffer;
 			RID light_process_dispatch_buffer_copy;
 
-			RID light_position_bufer;
+			RID light_position_buffer;
 
 			bool static_lights_dirty = true;
 			bool dynamic_lights_dirty = true;

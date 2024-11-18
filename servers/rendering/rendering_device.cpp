@@ -4361,6 +4361,10 @@ void RenderingDevice::draw_list_bind_index_array(DrawListID p_list, RID p_index_
 	}
 }
 
+bool RenderingDevice::is_raytracing_supported() {
+	return driver->is_raytracing_supported();
+}
+
 RID RenderingDevice::blas_create(RID p_vertex_array, RID p_index_array, RID p_transform_buffer, uint64_t p_transform_offset) {
 	ERR_RENDER_THREAD_GUARD_V(RID());
 
@@ -7243,6 +7247,7 @@ void RenderingDevice::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("raytracing_pipeline_create", "shader"), &RenderingDevice::_raytracing_pipeline_create, DEFVAL(TypedArray<RDPipelineSpecializationConstant>()));
 	ClassDB::bind_method(D_METHOD("raytracing_pipeline_is_valid", "raytracing_pipeline"), &RenderingDevice::raytracing_pipeline_is_valid);
 
+	ClassDB::bind_method(D_METHOD("is_raytracing_supported"), &RenderingDevice::is_raytracing_supported);
 	ClassDB::bind_method(D_METHOD("blas_create", "vertex_array", "index_array", "transform_buffer", "transform_offset"), &RenderingDevice::blas_create, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("tlas_create", "blases"), &RenderingDevice::_tlas_create);
 

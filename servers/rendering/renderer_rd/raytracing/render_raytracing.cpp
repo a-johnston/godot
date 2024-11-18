@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  render_raytracing.cpp                                          */
+/*  render_raytracing.cpp                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -5065,4 +5065,3 @@ RenderRaytracing::~RenderRaytracing() {
 		sdfgi_framebuffer_size_cache.remove(sdfgi_framebuffer_size_cache.begin());
 	}
 }
-

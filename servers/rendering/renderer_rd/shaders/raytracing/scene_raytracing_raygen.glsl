@@ -21,8 +21,8 @@ layout(set = 0, binding = 1) uniform accelerationStructureEXT tlas;
 
 layout(set = 0, binding = 2, std140) uniform SceneDataBlock {
 	SceneData data;
-} scene_data_block;
-
+}
+scene_data_block;
 
 void main() {
 	const vec2 pixel_center = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  scene_shader_raytracing.h                                      */
+/*  scene_shader_raytracing.h                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SCENE_SHADER_RAYTRACING_H
-#define SCENE_SHADER_RAYTRACING_H
+#ifndef SCENE_SHADER_RAYTRACING_RD_H
+#define SCENE_SHADER_RAYTRACING_RD_H
 
 #include "servers/rendering/renderer_rd/pipeline_hash_map_rd.h"
 #include "servers/rendering/renderer_rd/renderer_scene_render_rd.h"
@@ -369,5 +369,4 @@ public:
 
 } // namespace RendererSceneRenderImplementation
 
-#endif // SCENE_SHADER_RAYTRACING_H
-
+#endif // SCENE_SHADER_RAYTRACING_RD_H

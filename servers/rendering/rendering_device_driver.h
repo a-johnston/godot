@@ -707,6 +707,10 @@ public:
 	/**** RAYTRACING ****/
 	/********************/
 
+	virtual bool is_raytracing_supported() {
+		return false;
+	}
+
 	// ----- ACCELERATION STRUCTURE -----
 
 	enum AccelerationStructureType {

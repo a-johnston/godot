@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  scene_shader_raytracing.cpp                                    */
+/*  scene_shader_raytracing.cpp                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -930,4 +930,3 @@ uint32_t SceneShaderRaytracing::get_pipeline_compilations(RS::PipelineSource p_s
 	MutexLock lock(SceneShaderRaytracing::singleton_mutex);
 	return pipeline_compilations[p_source];
 }
-

@@ -1217,6 +1217,7 @@ private:
 	RID_Owner<AccelerationStructure> acceleration_structure_owner;
 
 public:
+	bool is_raytracing_supported();
 	RID blas_create(RID p_vertex_array, RID p_index_array, RID p_transform_buffer, uint64_t p_transform_offset);
 	RID tlas_create(const Vector<RID> &blases);
 

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  render_raytracing.h                                            */
+/*  render_raytracing.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RENDER_RAYTRACING_H
-#define RENDER_RAYTRACING_H
+#ifndef RENDER_RAYTRACING_RD_H
+#define RENDER_RAYTRACING_RD_H
 
 #include "core/templates/paged_allocator.h"
 #include "servers/rendering/renderer_rd/cluster_builder_rd.h"
@@ -757,5 +757,4 @@ public:
 };
 } // namespace RendererSceneRenderImplementation
 
-#endif // RENDER_RAYTRACING_H
-
+#endif // RENDER_RAYTRACING_RD_H

@@ -49,6 +49,10 @@
 /**************************************************************************/
 
 #import "rendering_device_driver_metal.h"
+#include "core/templates/local_vector.h"
+#include <Foundation/Foundation.h>
+#include <cstdint>
+#include "servers/rendering/rendering_device_commons.h"
 
 #import "pixel_formats.h"
 #import "rendering_context_driver_metal.h"
@@ -3630,14 +3634,67 @@ RDD::PipelineID RenderingDeviceDriverMetal::compute_pipeline_create(ShaderID p_s
 
 #pragma mark - Raytracing
 
-RDD::AccelerationStructureID RenderingDeviceDriverMetal::blas_create(BufferID p_vertex_buffer, uint64_t p_vertex_offset, VertexFormatID p_vertex_format, uint32_t p_vertex_count, BufferID p_index_buffer, IndexBufferFormat p_index_format, uint64_t p_index_offset_bytes, uint32_t p_index_count, RDD::BufferID p_transform_buffer, uint64_t p_transform_offset) {
-	// TODO
-	return RDD::AccelerationStructureID();
+bool RenderingDeviceDriverMetal::is_raytracing_supported() {
+	return true;
+}
+
+RDD::AccelerationStructureID RenderingDeviceDriverMetal::blas_create(
+	BufferID p_vertex_buffer,
+	uint64_t p_vertex_offset,
+	VertexFormatID p_vertex_format,
+	uint32_t p_vertex_count,
+	BufferID p_index_buffer,
+	IndexBufferFormat p_index_format,
+	uint64_t p_index_offset_bytes,
+	uint32_t p_index_count,
+	RDD::BufferID p_transform_buffer,
+	uint64_t p_transform_offset
+) {
+    MTLAccelerationStructureTriangleGeometryDescriptor *descriptor = [MTLAccelerationStructureTriangleGeometryDescriptor descriptor];
+	MTLVertexDescriptor *vert_desc = rid::get(p_vertex_format);
+	uint32_t idx = get_metal_buffer_index_for_vertex_attribute_binding(0);
+
+	if (@available(macOS 13.0, *)) {
+	    descriptor.transformationMatrixBuffer = rid::get(p_transform_buffer);
+		descriptor.transformationMatrixBufferOffset = p_transform_offset;
+	} else {
+		// TODO
+	}
+
+	descriptor.vertexBuffer = rid::get(p_vertex_buffer);
+	descriptor.vertexBufferOffset = p_vertex_offset;
+	descriptor.vertexStride = vert_desc.layouts[idx].stride;
+
+	descriptor.triangleCount = p_index_count / 3;
+	descriptor.indexBuffer = rid::get(p_index_buffer);
+	if (p_index_format == INDEX_BUFFER_FORMAT_UINT16) {
+		descriptor.indexType = MTLIndexType::MTLIndexTypeUInt16;
+		descriptor.indexBufferOffset = p_index_offset_bytes / sizeof(uint16_t);
+	} else {
+		descriptor.indexType = MTLIndexType::MTLIndexTypeUInt32;
+		descriptor.indexBufferOffset = p_index_offset_bytes / sizeof(uint32_t);
+	}
+
+	BlasStructureInfo *info = VersatileResource::allocate<BlasStructureInfo>(resources_allocator);
+	info->mtl_structure = descriptor;
+
+	return RDD::AccelerationStructureID(info);
 }
 
 RDD::AccelerationStructureID RenderingDeviceDriverMetal::tlas_create(const LocalVector<RDD::AccelerationStructureID> &p_blases) {
-	// TODO
-	return RDD::AccelerationStructureID();
+	MTLPrimitiveAccelerationStructureDescriptor *descriptor = [MTLPrimitiveAccelerationStructureDescriptor descriptor];
+	NSMutableArray *mtl_geometry = [NSMutableArray arrayWithCapacity: p_blases.size()];
+
+	for (int i = 0; i < p_blases.size(); i++) {
+		mtl_geometry[i] = ((BlasStructureInfo *) p_blases[i].id)->mtl_structure;
+	}
+
+	descriptor.geometryDescriptors = mtl_geometry;
+
+	TlasStructureInfo *info = VersatileResource::allocate<TlasStructureInfo>(resources_allocator);
+	info->mtl_structure = descriptor;
+
+	return RDD::AccelerationStructureID(info);
 }
 
 void RenderingDeviceDriverMetal::acceleration_structure_free(RDD::AccelerationStructureID p_acceleration_structure) {
@@ -3658,19 +3715,43 @@ void RenderingDeviceDriverMetal::raytracing_pipeline_free(RDD::RaytracingPipelin
 // ----- COMMANDS -----
 
 void RenderingDeviceDriverMetal::command_build_acceleration_structure(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure) {
-	// TODO
+	TlasStructureInfo *info = (TlasStructureInfo *) p_acceleration_structure.id;
+
+    MTLAccelerationStructureSizes sizes = [device accelerationStructureSizesWithDescriptor:info->mtl_structure];
+    id<MTLAccelerationStructure> structure = [device newAccelerationStructureWithSize:sizes.accelerationStructureSize];
+    id<MTLBuffer> scratch = [device newBufferWithLength:sizes.buildScratchBufferSize options:MTLResourceStorageModePrivate];
+
+	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
+    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
+
+	// TODO: Optional structure compaction pass
+    [command_encoder buildAccelerationStructure:structure descriptor:info->mtl_structure scratchBuffer:scratch scratchBufferOffset:0];
+	[command_encoder endEncoding];
+	[command_buffer commit];
 }
 
 void RenderingDeviceDriverMetal::command_bind_raytracing_pipeline(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline) {
+	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
+    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
 	// TODO
+	[command_encoder endEncoding];
+	[command_buffer commit];
 }
 
 void RenderingDeviceDriverMetal::command_bind_raytracing_uniform_set(CommandBufferID p_cmd_buffer, UniformSetID p_uniform_set, ShaderID p_shader, uint32_t p_set_index) {
+	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
+    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
 	// TODO
+	[command_encoder endEncoding];
+	[command_buffer commit];
 }
 
 void RenderingDeviceDriverMetal::command_raytracing_trace_rays(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline, ShaderID p_shader, uint32_t p_width, uint32_t p_height) {
+	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
+    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
 	// TODO
+	[command_encoder endEncoding];
+	[command_buffer commit];
 }
 
 #pragma mark - Queries

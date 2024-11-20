@@ -775,7 +775,8 @@ private:
 			TextureInfo,
 			VertexFormatInfo,
 			ShaderInfo,
-			UniformSetInfo>;
+			UniformSetInfo,
+			AccelerationStructureInfo>;
 	PagedAllocator<VersatileResource, true> resources_allocator;
 
 	/******************/

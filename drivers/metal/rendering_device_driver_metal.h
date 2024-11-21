@@ -382,12 +382,10 @@ public:
 
 #pragma mark - Raytracing
 
-	struct BlasStructureInfo {
-		MTLAccelerationStructureGeometryDescriptor *mtl_structure = nullptr;
-	};
-
-	struct TlasStructureInfo {
-		MTLAccelerationStructureDescriptor *mtl_structure = nullptr;
+	struct AccelerationStructureInfo {
+		AccelerationStructureType type = ACCELERATION_STRUCTURE_TYPE_BLAS;
+		MTLAccelerationStructureGeometryDescriptor *blas_desc = nil;
+		MTLAccelerationStructureDescriptor *tlas_desc = nil;
 	};
 
 	virtual bool is_raytracing_supported() override final;
@@ -463,7 +461,7 @@ public:
 	size_t get_texel_buffer_alignment_for_format(RDD::DataFormat p_format) const;
 	size_t get_texel_buffer_alignment_for_format(MTLPixelFormat p_format) const;
 
-	using VersatileResource = VersatileResourceTemplate<BlasStructureInfo, TlasStructureInfo>;
+	using VersatileResource = VersatileResourceTemplate<AccelerationStructureInfo>;
 	PagedAllocator<VersatileResource, true> resources_allocator;
 
 	/******************/

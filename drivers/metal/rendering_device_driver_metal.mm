@@ -49,6 +49,8 @@
 /**************************************************************************/
 
 #import "rendering_device_driver_metal.h"
+#include "core/error/error_macros.h"
+#include "vulkan/vulkan_core.h"
 #include "core/templates/local_vector.h"
 #include <Foundation/Foundation.h>
 #include <cstdint>
@@ -1816,7 +1818,7 @@ Error RenderingDeviceDriverMetal::_reflect_spirv16(VectorView<ShaderStageSPIRVDa
 		}
 
 		ERR_FAIL_COND_V_MSG(!resources.atomic_counters.empty(), FAILED, "Atomic counters not supported");
-		ERR_FAIL_COND_V_MSG(!resources.acceleration_structures.empty(), FAILED, "Acceleration structures not supported");
+		// ERR_FAIL_COND_V_MSG(!resources.acceleration_structures.empty(), FAILED, "Acceleration structures not supported");
 		ERR_FAIL_COND_V_MSG(!resources.shader_record_buffers.empty(), FAILED, "Shader record buffers not supported");
 
 		if (stage == SHADER_STAGE_VERTEX && !resources.stage_inputs.empty()) {
@@ -3658,7 +3660,7 @@ RDD::AccelerationStructureID RenderingDeviceDriverMetal::blas_create(
 	    descriptor.transformationMatrixBuffer = rid::get(p_transform_buffer);
 		descriptor.transformationMatrixBufferOffset = p_transform_offset;
 	} else {
-		// TODO
+		// TODO: Transform vertices and add a new buffer? Require vertices to be pre-transformed?
 	}
 
 	descriptor.vertexBuffer = rid::get(p_vertex_buffer);
@@ -3675,37 +3677,42 @@ RDD::AccelerationStructureID RenderingDeviceDriverMetal::blas_create(
 		descriptor.indexBufferOffset = p_index_offset_bytes / sizeof(uint32_t);
 	}
 
-	BlasStructureInfo *info = VersatileResource::allocate<BlasStructureInfo>(resources_allocator);
-	info->mtl_structure = descriptor;
+	AccelerationStructureInfo *info = VersatileResource::allocate<AccelerationStructureInfo>(resources_allocator);
+	info->blas_desc = descriptor;
+
+	// TODO: Add bounding box support if support is added for descriptors with specialized intersection functions
 
 	return RDD::AccelerationStructureID(info);
 }
 
 RDD::AccelerationStructureID RenderingDeviceDriverMetal::tlas_create(const LocalVector<RDD::AccelerationStructureID> &p_blases) {
+	// TODO: This is extremely naive use of the metal api
+
 	MTLPrimitiveAccelerationStructureDescriptor *descriptor = [MTLPrimitiveAccelerationStructureDescriptor descriptor];
 	NSMutableArray *mtl_geometry = [NSMutableArray arrayWithCapacity: p_blases.size()];
 
 	for (int i = 0; i < p_blases.size(); i++) {
-		mtl_geometry[i] = ((BlasStructureInfo *) p_blases[i].id)->mtl_structure;
+		mtl_geometry[i] = ((AccelerationStructureInfo *) p_blases[i].id)->blas_desc;
 	}
 
 	descriptor.geometryDescriptors = mtl_geometry;
 
-	TlasStructureInfo *info = VersatileResource::allocate<TlasStructureInfo>(resources_allocator);
-	info->mtl_structure = descriptor;
+	AccelerationStructureInfo *info = VersatileResource::allocate<AccelerationStructureInfo>(resources_allocator);
+	info->tlas_desc = descriptor;
 
 	return RDD::AccelerationStructureID(info);
 }
 
 void RenderingDeviceDriverMetal::acceleration_structure_free(RDD::AccelerationStructureID p_acceleration_structure) {
-	// TODO
+	AccelerationStructureInfo *info = (AccelerationStructureInfo *) p_acceleration_structure.id;
+	info->blas_desc = nullptr;
+	info->tlas_desc = nullptr;
 }
 
 // ----- PIPELINE -----
 
 RDD::RaytracingPipelineID RenderingDeviceDriverMetal::raytracing_pipeline_create(ShaderID p_shader, VectorView<PipelineSpecializationConstant> p_specialization_constants) {
-	// TODO
-	return RaytracingPipelineID();
+	return RDD::RaytracingPipelineID(compute_pipeline_create(p_shader, p_specialization_constants).id);
 }
 
 void RenderingDeviceDriverMetal::raytracing_pipeline_free(RDD::RaytracingPipelineID p_pipeline) {
@@ -3715,35 +3722,27 @@ void RenderingDeviceDriverMetal::raytracing_pipeline_free(RDD::RaytracingPipelin
 // ----- COMMANDS -----
 
 void RenderingDeviceDriverMetal::command_build_acceleration_structure(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure) {
-	TlasStructureInfo *info = (TlasStructureInfo *) p_acceleration_structure.id;
+	AccelerationStructureInfo *info = (AccelerationStructureInfo *) p_acceleration_structure.id;
 
-    MTLAccelerationStructureSizes sizes = [device accelerationStructureSizesWithDescriptor:info->mtl_structure];
+    MTLAccelerationStructureSizes sizes = [device accelerationStructureSizesWithDescriptor:info->tlas_desc];
     id<MTLAccelerationStructure> structure = [device newAccelerationStructureWithSize:sizes.accelerationStructureSize];
     id<MTLBuffer> scratch = [device newBufferWithLength:sizes.buildScratchBufferSize options:MTLResourceStorageModePrivate];
 
-	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
-    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
+	MDCommandBuffer *cb = (MDCommandBuffer *)(p_cmd_buffer.id);
 
-	// TODO: Optional structure compaction pass
-    [command_encoder buildAccelerationStructure:structure descriptor:info->mtl_structure scratchBuffer:scratch scratchBufferOffset:0];
-	[command_encoder endEncoding];
-	[command_buffer commit];
+	// TODO: Optional structure compaction pass, especially for structures which are reused
+
+    [cb->raytrace.encoder buildAccelerationStructure:structure descriptor:info->tlas_desc scratchBuffer:scratch scratchBufferOffset:0];
 }
 
 void RenderingDeviceDriverMetal::command_bind_raytracing_pipeline(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline) {
-	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
-    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
-	// TODO
-	[command_encoder endEncoding];
-	[command_buffer commit];
+	MDCommandBuffer *cb = (MDCommandBuffer *)(p_cmd_buffer.id);
+	cb->bind_pipeline((RDD::PipelineID) &p_pipeline);
 }
 
 void RenderingDeviceDriverMetal::command_bind_raytracing_uniform_set(CommandBufferID p_cmd_buffer, UniformSetID p_uniform_set, ShaderID p_shader, uint32_t p_set_index) {
-	id<MTLCommandBuffer> command_buffer = rid::get(p_cmd_buffer);
-    id<MTLAccelerationStructureCommandEncoder> command_encoder = [command_buffer accelerationStructureCommandEncoder];
-	// TODO
-	[command_encoder endEncoding];
-	[command_buffer commit];
+	MDCommandBuffer *cb = (MDCommandBuffer *)(p_cmd_buffer.id);
+	cb->raytrace_bind_uniform_set(p_uniform_set, p_shader, p_set_index);
 }
 
 void RenderingDeviceDriverMetal::command_raytracing_trace_rays(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline, ShaderID p_shader, uint32_t p_width, uint32_t p_height) {

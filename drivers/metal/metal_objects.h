@@ -51,6 +51,7 @@
 #ifndef METAL_OBJECTS_H
 #define METAL_OBJECTS_H
 
+#include "core/typedefs.h"
 #import "metal_device_properties.h"
 #import "metal_utils.h"
 #import "pixel_formats.h"
@@ -120,12 +121,14 @@ enum class MDCommandBufferStateType {
 	Render,
 	Compute,
 	Blit,
+	Raytrace,
 };
 
 enum class MDPipelineType {
 	None,
 	Render,
 	Compute,
+	Raytrace,
 };
 
 class MDRenderPass;
@@ -317,6 +320,7 @@ private:
 
 	void _end_compute_dispatch();
 	void _end_blit();
+	void _end_raytrace();
 
 #pragma mark - Render
 
@@ -486,6 +490,14 @@ public:
 		}
 	} blit;
 
+	// State specific to a raytracing pass
+	struct {
+		id<MTLAccelerationStructureCommandEncoder> encoder = nil;
+		_FORCE_INLINE_ void reset() {
+			encoder = nil;
+		}
+	} raytrace;
+
 	_FORCE_INLINE_ id<MTLCommandBuffer> get_command_buffer() const {
 		return commandBuffer;
 	}
@@ -537,6 +549,10 @@ public:
 	void compute_bind_uniform_set(RDD::UniformSetID p_uniform_set, RDD::ShaderID p_shader, uint32_t p_set_index);
 	void compute_dispatch(uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups);
 	void compute_dispatch_indirect(RDD::BufferID p_indirect_buffer, uint64_t p_offset);
+
+#pragma mark - Raytracing Commands
+
+	void raytrace_bind_uniform_set(RDD::UniformSetID p_uniform_set, RDD::ShaderID p_shader, uint32_t p_set_index);
 
 	MDCommandBuffer(id<MTLCommandQueue> p_queue, RenderingDeviceDriverMetal *p_device_driver) :
 			device_driver(p_device_driver), queue(p_queue) {

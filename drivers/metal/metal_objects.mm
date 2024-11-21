@@ -71,6 +71,8 @@ void MDCommandBuffer::end() {
 			return _end_compute_dispatch();
 		case MDCommandBufferStateType::Blit:
 			return _end_blit();
+		case MDCommandBufferStateType::Raytrace:
+			return _end_raytrace();
 	}
 }
 
@@ -89,6 +91,8 @@ void MDCommandBuffer::bind_pipeline(RDD::PipelineID p_pipeline) {
 		_end_compute_dispatch();
 	} else if (type == MDCommandBufferStateType::Blit) {
 		_end_blit();
+	} else if (type == MDCommandBufferStateType::Raytrace) {
+		_end_raytrace();
 	}
 
 	if (p->type == MDPipelineType::Render) {
@@ -158,6 +162,10 @@ void MDCommandBuffer::bind_pipeline(RDD::PipelineID p_pipeline) {
 		compute.pipeline = (MDComputePipeline *)p;
 		compute.encoder = commandBuffer.computeCommandEncoder;
 		[compute.encoder setComputePipelineState:compute.pipeline->state];
+	} else if (p->type == MDPipelineType::Raytrace) {
+		DEV_ASSERT(type == MDCommandBufferStateType::None);
+		type = MDCommandBufferStateType::Raytrace;
+		raytrace.encoder = commandBuffer.accelerationStructureCommandEncoder;
 	}
 }
 
@@ -171,6 +179,9 @@ id<MTLBlitCommandEncoder> MDCommandBuffer::blit_command_encoder() {
 		case MDCommandBufferStateType::Compute:
 			_end_compute_dispatch();
 			break;
+		case MDCommandBufferStateType::Raytrace:
+			_end_raytrace();
+			break;
 		case MDCommandBufferStateType::Blit:
 			return blit.encoder;
 	}
@@ -181,20 +192,7 @@ id<MTLBlitCommandEncoder> MDCommandBuffer::blit_command_encoder() {
 }
 
 void MDCommandBuffer::encodeRenderCommandEncoderWithDescriptor(MTLRenderPassDescriptor *p_desc, NSString *p_label) {
-	switch (type) {
-		case MDCommandBufferStateType::None:
-			break;
-		case MDCommandBufferStateType::Render:
-			render_end_pass();
-			break;
-		case MDCommandBufferStateType::Compute:
-			_end_compute_dispatch();
-			break;
-		case MDCommandBufferStateType::Blit:
-			_end_blit();
-			break;
-	}
-
+	end();
 	id<MTLRenderCommandEncoder> enc = [commandBuffer renderCommandEncoderWithDescriptor:p_desc];
 	if (p_label != nil) {
 		[enc pushDebugGroup:p_label];
@@ -987,6 +985,35 @@ void MDCommandBuffer::_end_compute_dispatch() {
 
 	compute.end_encoding();
 	compute.reset();
+	type = MDCommandBufferStateType::None;
+}
+
+# pragma mark - Raytracing
+
+void MDCommandBuffer::raytrace_bind_uniform_set(RDD::UniformSetID p_uniform_set, RDD::ShaderID p_shader, uint32_t p_set_index) {
+	DEV_ASSERT(type == MDCommandBufferStateType::Compute);
+
+	id<MTLComputeCommandEncoder> enc = compute.encoder;
+	id<MTLDevice> device = enc.device;
+
+	MDShader *shader = (MDShader *)(p_shader.id);
+	UniformSet const &set_info = shader->sets[p_set_index];
+
+	MDUniformSet *set = (MDUniformSet *)(p_uniform_set.id);
+	BoundUniformSet &bus = set->boundUniformSetForShader(shader, device);
+	bus.merge_into(compute.resource_usage);
+
+	uint32_t const *offset = set_info.offsets.getptr(RDD::SHADER_STAGE_COMPUTE);
+	if (offset) {
+		[enc setBuffer:bus.buffer offset:*offset atIndex:p_set_index];
+	}
+}
+
+void MDCommandBuffer::_end_raytrace() {
+	DEV_ASSERT(type == MDCommandBufferStateType::Raytrace);
+
+	[raytrace.encoder endEncoding];
+	raytrace.reset();
 	type = MDCommandBufferStateType::None;
 }
 

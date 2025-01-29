@@ -181,6 +181,9 @@ protected:
 
 	void _validate_property(PropertyInfo &p_property) const;
 
+	void _notify_tree_node_started();
+	void _notify_tree_node_finished();
+
 	GDVIRTUAL0RC(Dictionary, _get_child_nodes)
 	GDVIRTUAL0RC(Array, _get_parameter_list)
 	GDVIRTUAL1RC(Ref<AnimationNode>, _get_child_by_name, StringName)

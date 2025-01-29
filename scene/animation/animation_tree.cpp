@@ -33,6 +33,7 @@
 
 #include "animation_blend_tree.h"
 #include "scene/animation/animation_player.h"
+#include "scene/scene_string_names.h"
 
 void AnimationNode::get_parameter_list(List<PropertyInfo> *r_list) const {
 	Array parameters;
@@ -589,6 +590,26 @@ void AnimationNode::_bind_methods() {
 	BIND_ENUM_CONSTANT(FILTER_BLEND);
 }
 
+void AnimationNode::_notify_tree_node_started() {
+	AnimationNodeBlendTree *blend_tree = Object::cast_to<AnimationNodeBlendTree>(node_state.parent);
+	if (blend_tree) {
+		StringName node_name = blend_tree->get_node_name(this);
+		if (!node_name.is_empty()) {
+			process_state->tree->emit_signal(SceneStringName(node_started), node_name);
+		}
+	}
+}
+
+void AnimationNode::_notify_tree_node_finished() {
+	AnimationNodeBlendTree *blend_tree = Object::cast_to<AnimationNodeBlendTree>(node_state.parent);
+	if (blend_tree) {
+		StringName node_name = blend_tree->get_node_name(this);
+		if (!node_name.is_empty()) {
+			process_state->tree->emit_signal(SceneStringName(node_finished), node_name);
+		}
+	}
+}
+
 AnimationNode::AnimationNode() {
 }
 
@@ -991,6 +1012,8 @@ void AnimationTree::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "anim_player", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "AnimationPlayer"), "set_animation_player", "get_animation_player");
 
 	ADD_SIGNAL(MethodInfo(SNAME("animation_player_changed")));
+	ADD_SIGNAL(MethodInfo(SceneStringName(node_started), PropertyInfo(Variant::STRING_NAME, "node")));
+	ADD_SIGNAL(MethodInfo(SceneStringName(node_finished), PropertyInfo(Variant::STRING_NAME, "node")));
 }
 
 AnimationTree::AnimationTree() {

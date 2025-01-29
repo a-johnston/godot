@@ -696,6 +696,14 @@ AnimationNode::NodeTimeInfo AnimationNodeOneShot::_process(const AnimationMixer:
 	set_parameter(fade_in_remaining, cur_fade_in_remaining);
 	set_parameter(fade_out_remaining, cur_fade_out_remaining);
 
+	if (cur_active != (bool)get_parameter(active)) {
+		if (cur_active) {
+			_notify_tree_node_finished();
+		} else {
+			_notify_tree_node_started();
+		}
+	}
+
 	return cur_internal_active ? os_nti : main_nti;
 }
 
@@ -1451,6 +1459,7 @@ AnimationNodeOutput::AnimationNodeOutput() {
 void AnimationNodeBlendTree::add_node(const StringName &p_name, Ref<AnimationNode> p_node, const Vector2 &p_position) {
 	ERR_FAIL_COND(nodes.has(p_name));
 	ERR_FAIL_COND(p_node.is_null());
+	ERR_FAIL_COND(node_to_name.has(*p_node));
 	ERR_FAIL_COND(p_name == SceneStringName(output));
 	ERR_FAIL_COND(String(p_name).contains_char('/'));
 
@@ -1459,6 +1468,7 @@ void AnimationNodeBlendTree::add_node(const StringName &p_name, Ref<AnimationNod
 	n.position = p_position;
 	n.connections.resize(n.node->get_input_count());
 	nodes[p_name] = n;
+	node_to_name[*p_node] = p_name;
 
 	emit_changed();
 	emit_signal(SNAME("tree_changed"));
@@ -1476,12 +1486,10 @@ Ref<AnimationNode> AnimationNodeBlendTree::get_node(const StringName &p_name) co
 }
 
 StringName AnimationNodeBlendTree::get_node_name(const Ref<AnimationNode> &p_node) const {
-	for (const KeyValue<StringName, Node> &E : nodes) {
-		if (E.value.node == p_node) {
-			return E.key;
-		}
+	AHashMap<AnimationNode *, StringName>::ConstIterator E = node_to_name.find(*p_node);
+	if (E) {
+		return E->value;
 	}
-
 	ERR_FAIL_V(StringName());
 }
 
@@ -1525,6 +1533,7 @@ void AnimationNodeBlendTree::remove_node(const StringName &p_name) {
 
 	{
 		Ref<AnimationNode> node = nodes[p_name].node;
+		node_to_name.erase(*node);
 		node->disconnect(SNAME("tree_changed"), callable_mp(this, &AnimationNodeBlendTree::_tree_changed));
 		node->disconnect(SNAME("animation_node_renamed"), callable_mp(this, &AnimationNodeBlendTree::_animation_node_renamed));
 		node->disconnect(SNAME("animation_node_removed"), callable_mp(this, &AnimationNodeBlendTree::_animation_node_removed));
@@ -1554,8 +1563,8 @@ void AnimationNodeBlendTree::rename_node(const StringName &p_name, const StringN
 	ERR_FAIL_COND(p_new_name == SceneStringName(output));
 
 	nodes[p_name].node->disconnect_changed(callable_mp(this, &AnimationNodeBlendTree::_node_changed));
-
 	nodes[p_new_name] = nodes[p_name];
+	node_to_name[*(nodes[p_new_name].node)] = p_new_name;
 	nodes.erase(p_name);
 
 	// Rename connections.
@@ -1853,7 +1862,8 @@ void AnimationNodeBlendTree::_initialize_node_tree() {
 	n.node = output;
 	n.position = Vector2(300, 150);
 	n.connections.resize(1);
-	nodes["output"] = n;
+	nodes[SceneStringName(output)] = n;
+	node_to_name[*n.node] = SceneStringName(output);
 }
 
 AnimationNodeBlendTree::AnimationNodeBlendTree() {

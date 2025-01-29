@@ -45,6 +45,18 @@
 				Emitted when the [member anim_player] is changed.
 			</description>
 		</signal>
+		<signal name="node_finished">
+			<param index="0" name="node" type="StringName" />
+			<description>
+				Emitted when the [param node] finishes playback. Only emitted for OneShot and StateMachine nodes.
+			</description>
+		</signal>
+		<signal name="node_started">
+			<param index="0" name="node" type="StringName" />
+			<description>
+				Emitted when the [param node] starts playback. Only emitted for OneShot and StateMachine nodes.
+			</description>
+		</signal>
 	</signals>
 	<constants>
 		<constant name="ANIMATION_PROCESS_PHYSICS" value="0" enum="AnimationProcessCallback" deprecated="See [constant AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS].">

@@ -2483,4 +2483,7 @@ void SceneTreeEditor::NodeCache::clear() {
 	}
 	cache.clear();
 	to_delete.clear();
+	current_pinned_node = nullptr;
+	current_scene_node = nullptr;
+	current_has_pin = false;
 }

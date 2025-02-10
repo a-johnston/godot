@@ -62,6 +62,7 @@ void AnimationPlayerEditor::_node_removed(Node *p_node) {
 		}
 
 		player = nullptr;
+		original_node = nullptr;
 
 		set_process(false);
 

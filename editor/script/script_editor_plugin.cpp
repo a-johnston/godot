@@ -1786,7 +1786,8 @@ void ScriptEditor::_update_members_overview() {
 
 		Vector<FuzzySearchResult> results;
 		FuzzySearch fuzzy;
-		fuzzy.set_query(filter, false);
+		fuzzy.set_query(filter);
+		fuzzy.set_case_sensitive(false);
 		fuzzy.search_all(search_names, results);
 
 		for (const FuzzySearchResult &res : results) {
@@ -2058,7 +2059,8 @@ void ScriptEditor::_update_script_names() {
 
 		Vector<FuzzySearchResult> results;
 		FuzzySearch fuzzy;
-		fuzzy.set_query(filter, false);
+		fuzzy.set_query(filter);
+		fuzzy.set_case_sensitive(false);
 		fuzzy.search_all(search_names, results);
 
 		for (const FuzzySearchResult &res : results) {

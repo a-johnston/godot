@@ -1104,7 +1104,8 @@ void PopupMenu::_filter_items(const String &p_query) {
 
 	Vector<FuzzySearchResult> results;
 	FuzzySearch fuzzy;
-	fuzzy.set_query(p_query, false);
+	fuzzy.set_query(p_query);
+	fuzzy.set_case_sensitive(false);
 	fuzzy.search_all(search_names, results);
 
 	for (PopupMenu::Item &item : items) {
